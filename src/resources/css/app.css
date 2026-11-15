@@ -1,0 +1,383 @@
+@import "tailwindcss";
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans:
+        "Instrument Sans", ui-sans-serif, system-ui, sans-serif,
+        "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+        "Noto Color Emoji";
+    /* Display | judul & angka */
+    --font-display: "Bricolage Grotesque", "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+
+    /* Brand (indigo) | sisa desain lama, dihapus setelah semua halaman pindah */
+    --color-brand-50: #eef2ff;
+    --color-brand-100: #e0e7ff;
+    --color-brand-200: #c7d2fe;
+    --color-brand-300: #a5b4fc;
+    --color-brand-400: #818cf8;
+    --color-brand-500: #6366f1;
+    --color-brand-600: #4f46e5;
+    --color-brand-700: #4338ca;
+    --color-brand-800: #3730a3;
+    --color-brand-900: #312e81;
+    --color-brand-950: #1e1b4b;
+
+    /* Tetap di kedua tema */
+    --color-ink: #15181d;
+    --color-tool: #ffc629;
+    --color-tool-deep: #f0b400;
+
+    /* Dashboard motion: masuk bertahap, bar tumbuh, garis tergambar */
+    --animate-rise: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    --animate-grow: grow 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    --animate-draw: draw 1.1s cubic-bezier(0.4, 0, 0.2, 1) both;
+
+    @keyframes rise {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+    }
+    @keyframes grow {
+        from {
+            transform: scaleX(0);
+        }
+    }
+    @keyframes draw {
+        from {
+            stroke-dashoffset: 1;
+        }
+    }
+    @keyframes drift {
+        to {
+            transform: translate3d(3%, 4%, 0) scale(1.06);
+        }
+    }
+}
+
+/* Token semantik | berganti otomatis per tema, jadi view tak perlu dark: */
+@theme inline {
+    --color-canvas: var(--c-canvas);
+    --color-surface: var(--c-surface);
+    --color-sunken: var(--c-sunken);
+    --color-fg: var(--c-fg);
+    --color-muted: var(--c-muted);
+    --color-line: var(--c-line);
+    --color-line-strong: var(--c-line-strong);
+    --color-link: var(--c-link);
+    --color-image: var(--c-image);
+    --color-pdf: var(--c-pdf);
+    --color-ok: var(--c-ok);
+    --color-warn: var(--c-warn);
+    --color-danger: var(--c-danger);
+    /* Seri chart | urutan tetap, divalidasi CVD (dataviz) */
+    --color-series-1: var(--c-s1);
+    --color-series-2: var(--c-s2);
+    --color-series-3: var(--c-s3);
+    /* Dashboard kaca */
+    --color-glass: var(--c-glass);
+    --color-glass-strong: var(--c-glass-strong);
+    --color-glass-line: var(--c-glass-line);
+}
+
+/* Dark mode: <html data-theme> diset partials/theme-head + js/theme.js (light|dark|system) */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *, .dark, .dark *));
+
+@layer base {
+    :root,
+    [data-theme="light"] {
+        color-scheme: light;
+        --c-canvas: #f4f5f2;
+        --c-surface: #ffffff;
+        --c-sunken: #eaece7;
+        --c-fg: #15181d;
+        --c-muted: #5c6470;
+        --c-line: #d8dbd4;
+        --c-line-strong: #15181d;
+        --c-link: #2f5bd0;
+        --c-image: #2e7d5b;
+        --c-pdf: #c2412d;
+        --c-ok: #2e7d5b;
+        --c-warn: #a35f00;
+        --c-danger: #c2412d;
+        --c-s1: #2a78d6;
+        --c-s2: #eb6834;
+        --c-s3: #1baf7a;
+        --c-glass: rgb(255 255 255 / 0.62);
+        --c-glass-strong: rgb(255 255 255 / 0.78);
+        --c-glass-line: rgb(21 24 29 / 0.09);
+        --c-glass-shine: rgb(255 255 255 / 0.9);
+        --c-glass-shadow: rgb(21 24 29 / 0.12);
+        --c-glow-tool: rgb(255 198 41 / 0.34);
+        --c-glow-cool: rgb(47 91 208 / 0.12);
+        --c-peg: rgb(21 24 29 / 0.075);
+    }
+    [data-theme="dark"] {
+        color-scheme: dark;
+        --c-canvas: #181a1e;
+        --c-surface: #202328;
+        --c-sunken: #15171a;
+        --c-fg: #ecede8;
+        --c-muted: #9aa1ab;
+        --c-line: #33383f;
+        --c-line-strong: #ecede8;
+        --c-link: #86a5f4;
+        --c-image: #63c497;
+        --c-pdf: #f0846c;
+        --c-ok: #63c497;
+        --c-warn: #f2b84b;
+        --c-danger: #f0846c;
+        --c-s1: #3987e5;
+        --c-s2: #d95926;
+        --c-s3: #199e70;
+        --c-glass: rgb(36 39 45 / 0.58);
+        --c-glass-strong: rgb(30 33 38 / 0.78);
+        --c-glass-line: rgb(255 255 255 / 0.08);
+        --c-glass-shine: rgb(255 255 255 / 0.06);
+        --c-glass-shadow: rgb(0 0 0 / 0.45);
+        --c-glow-tool: rgb(255 198 41 / 0.13);
+        --c-glow-cool: rgb(57 135 229 / 0.12);
+        --c-peg: rgb(255 255 255 / 0.05);
+    }
+    html {
+        scroll-behavior: smooth;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        html {
+            scroll-behavior: auto;
+        }
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-delay: 0s !important;
+            transition-duration: 0.01ms !important;
+        }
+        ::view-transition-group(*),
+        ::view-transition-old(*),
+        ::view-transition-new(*) {
+            animation: none !important;
+        }
+    }
+    body {
+        @apply bg-canvas text-fg antialiased;
+    }
+    :focus-visible {
+        outline: 2px solid var(--c-fg);
+        outline-offset: 2px;
+    }
+    [x-cloak] {
+        display: none !important;
+    }
+    /* Pratinjau: tanpa seleksi, seret, atau menu "simpan gambar" saat ditekan lama di HP */
+    [data-no-save] {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
+    [data-no-save] :is(img, canvas) {
+        -webkit-user-drag: none;
+    }
+}
+
+@layer components {
+    /* Tombol | base dibagi lewat grup selektor (Tailwind 4 tak bisa @apply kelas kustom) */
+    .btn,
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-danger,
+    .btn-danger-soft {
+        @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold
+            transition-colors disabled:cursor-not-allowed disabled:opacity-45;
+    }
+    /* Kuning perkakas, tepi bawah tebal seperti tuts */
+    .btn-primary {
+        @apply bg-tool text-ink shadow-[inset_0_-2px_0_rgb(0_0_0/0.22)] hover:bg-tool-deep
+            active:translate-y-px active:shadow-none disabled:active:translate-y-0;
+    }
+    .btn-secondary {
+        @apply border border-line bg-surface text-fg hover:border-line-strong;
+    }
+    .btn-ghost {
+        @apply text-muted hover:bg-sunken hover:text-fg;
+    }
+    .btn-danger {
+        @apply bg-danger text-white hover:opacity-90 dark:text-ink;
+    }
+    /* Aksi berbahaya di baris tabel: tenang sampai disentuh, konfirmasi tetap pakai .btn-danger */
+    .btn-danger-soft {
+        @apply text-danger hover:bg-danger/10;
+    }
+    .btn-sm {
+        @apply min-h-8 px-3 py-1 text-xs;
+    }
+
+    /* Field */
+    .label {
+        @apply mb-1.5 block text-sm font-medium text-fg;
+    }
+    .input {
+        @apply block w-full rounded-md border border-line bg-surface px-3 py-2.5 text-sm text-fg
+            placeholder:text-muted/70 focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong;
+    }
+    .field-error {
+        @apply mt-1.5 text-xs font-medium text-danger;
+    }
+
+    /* Panel */
+    .card {
+        @apply rounded-[10px] border border-line bg-surface;
+    }
+
+    /* Tag kecil, bukan pil */
+    .badge {
+        @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium;
+    }
+
+    /* Link teks: tinta bergaris bawah, garis jadi kuning saat hover */
+    .link {
+        @apply font-medium text-fg underline decoration-line underline-offset-4 hover:decoration-tool
+            hover:decoration-2;
+    }
+
+    /* ===== Dashboard: panel kaca di atas papan perkakas (pegboard) ===== */
+
+    /* Latar tetap: titik pegboard + cahaya kuning perkakas yang bergeser pelan */
+    .dash-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        pointer-events: none;
+        background:
+            radial-gradient(var(--c-peg) 1.2px, transparent 1.6px) 0 0 / 22px 22px,
+            var(--c-canvas);
+    }
+    .dash-backdrop::before,
+    .dash-backdrop::after {
+        content: "";
+        position: absolute;
+        border-radius: 9999px;
+        filter: blur(60px);
+        animation: drift 22s ease-in-out infinite alternate;
+    }
+    .dash-backdrop::before {
+        top: -18rem;
+        left: -10rem;
+        width: 46rem;
+        height: 34rem;
+        background: var(--c-glow-tool);
+    }
+    .dash-backdrop::after {
+        right: -14rem;
+        bottom: -16rem;
+        width: 44rem;
+        height: 36rem;
+        background: var(--c-glow-cool);
+        animation-delay: -11s;
+    }
+
+    .glass,
+    .glass-strong {
+        border: 1px solid var(--c-glass-line);
+        background-color: var(--c-glass);
+        box-shadow:
+            inset 0 1px 0 var(--c-glass-shine),
+            0 10px 30px -18px var(--c-glass-shadow);
+        -webkit-backdrop-filter: blur(18px) saturate(1.4);
+        backdrop-filter: blur(18px) saturate(1.4);
+    }
+    .glass {
+        @apply rounded-xl;
+    }
+    .glass-strong {
+        background-color: var(--c-glass-strong);
+    }
+    /* Tanpa backdrop-filter, kaca tembus pandang menurunkan kontras: pakai permukaan padat */
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .glass,
+        .glass-strong {
+            background-color: var(--c-surface);
+        }
+    }
+    /* Panel yang bisa diklik: naik sedikit */
+    .glass-hover {
+        @apply transition duration-200 hover:-translate-y-0.5 hover:border-line motion-reduce:hover:translate-y-0;
+    }
+
+    /* Navigasi samping */
+    .nav-item {
+        @apply relative flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted transition-colors
+            duration-200 hover:bg-fg/6 hover:text-fg;
+    }
+    .nav-item[aria-current="page"] {
+        @apply bg-ink text-white shadow-sm hover:bg-ink hover:text-white dark:bg-fg dark:text-ink dark:hover:bg-fg dark:hover:text-ink;
+    }
+    .nav-item[aria-current="page"] svg {
+        @apply text-tool dark:text-ink;
+    }
+
+    /* Judul halaman dashboard */
+    .page-title {
+        @apply font-display text-2xl font-extrabold tracking-tight text-fg sm:text-[1.75rem];
+    }
+    .eyebrow {
+        @apply text-xs font-semibold uppercase tracking-wider text-muted;
+    }
+
+    /* Tabel di dalam panel kaca */
+    .table {
+        @apply w-full text-left text-sm;
+    }
+    .table thead {
+        @apply border-b border-line text-xs font-semibold uppercase tracking-wider text-muted;
+    }
+    .table th {
+        @apply px-5 py-3 font-semibold whitespace-nowrap;
+    }
+    .table td {
+        @apply px-5 py-3.5 align-middle;
+    }
+    .table tbody tr {
+        @apply border-b border-line/70 transition-colors last:border-0 hover:bg-fg/[0.03];
+    }
+
+    /* Status | warna semantik, sama di kedua tema */
+    .badge-ok {
+        @apply bg-ok/12 text-ok;
+    }
+    .badge-warn {
+        @apply bg-warn/12 text-warn;
+    }
+    .badge-danger {
+        @apply bg-danger/12 text-danger;
+    }
+    .badge-muted {
+        @apply bg-fg/6 text-muted;
+    }
+    .badge-pro {
+        @apply bg-tool text-ink;
+    }
+
+    /* Masuk bertahap untuk isi halaman */
+    .stagger > * {
+        animation: var(--animate-rise);
+    }
+    .stagger > :nth-child(2) {
+        animation-delay: 60ms;
+    }
+    .stagger > :nth-child(3) {
+        animation-delay: 120ms;
+    }
+    .stagger > :nth-child(4) {
+        animation-delay: 180ms;
+    }
+    .stagger > :nth-child(n + 5) {
+        animation-delay: 240ms;
+    }
+}
