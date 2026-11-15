@@ -5,7 +5,6 @@ namespace App\Livewire\Client;
 use App\Actions\Billing\HandleXenditPaymentCallback;
 use App\Actions\Billing\StartCheckout;
 use App\Enums\BillingPeriod;
-use App\Enums\PaymentChannel;
 use App\Enums\PaymentStatus;
 use App\Enums\QrTemplate;
 use App\Exceptions\BillingException;
@@ -13,6 +12,7 @@ use App\Livewire\Concerns\GuardsPropertyTypes;
 use App\Livewire\Concerns\ResolvesVisitor;
 use App\Models\Payment;
 use App\Models\Plan;
+use App\Services\Billing\PaymentChannelCatalog;
 use App\Services\Billing\PaymentMethodCatalog;
 use App\Services\Billing\PlanPeriodCalculator;
 use App\Services\Billing\XenditClient;
@@ -61,7 +61,7 @@ class Billing extends Component
     // Selected method in the modal (validated against active methods on pay).
     public string $channel = '';
 
-    // OVO number; sent to Xendit only, never stored.
+    // E-wallet number for push-notification channels (OVO); sent to the gateway only, never stored.
     public string $mobileNumber = '';
 
     public bool $checkoutOpen = false;
@@ -109,7 +109,7 @@ class Billing extends Component
         $user = $this->visitor();
 
         $period = BillingPeriod::tryFrom($this->period);
-        $channel = PaymentChannel::tryFrom($this->channel);
+        $channel = app(PaymentChannelCatalog::class)->find($this->channel);
 
         if ($period === null || $channel === null) {
             $this->addError('checkout', 'Pilih paket dan metode pembayaran.');
@@ -161,7 +161,7 @@ class Billing extends Component
         $payments = $this->visitor()->payments()
             ->whereKey(array_filter([$this->activePaymentId, $this->paymentId]))
             ->where('status', PaymentStatus::Pending->value)
-            ->whereNotNull('xendit_payment_request_id')
+            ->inApp()
             ->get();
 
         foreach ($payments as $payment) {
@@ -257,7 +257,7 @@ class Billing extends Component
 
         $payments = $user->payments()
             ->latest('created_at')
-            ->paginate(10, ['id', 'order_id', 'invoice_url', 'xendit_payment_request_id', 'plan', 'period', 'kind', 'amount', 'currency', 'status', 'payment_method', 'payment_channel', 'expires_at', 'paid_at', 'period_end', 'created_at']);
+            ->paginate(10, ['id', 'order_id', 'invoice_url', 'xendit_payment_request_id', 'xendit_payment_session_id', 'plan', 'period', 'kind', 'amount', 'currency', 'status', 'payment_method', 'payment_channel', 'expires_at', 'paid_at', 'period_end', 'created_at']);
 
         $pendingPayment = $this->paymentId === null ? null : $user->payments()->whereKey($this->paymentId)->first();
         $activePayment = $this->activePaymentId === null ? null : $user->payments()->whereKey($this->activePaymentId)->first();
@@ -275,6 +275,7 @@ class Billing extends Component
             'billingEnabled' => app(XenditClient::class)->isConfigured() && $methods !== [],
             'canSimulate' => $activePayment !== null && app(XenditClient::class)->isTestMode() && in_array($activePayment->payDisplay(), self::SIMULATABLE, true),
             'methods' => $methods,
+            'channels' => app(PaymentChannelCatalog::class)->all(),
             'activePayment' => $activePayment,
             'activePayable' => $activePayment !== null && $this->isPayable($activePayment),
             'qrImage' => $this->qrImage($activePayment),

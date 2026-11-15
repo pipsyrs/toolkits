@@ -42,8 +42,8 @@ class PricingTest extends TestCase
     {
         $lines = app(PlanHighlights::class)->for([
             'max_file_mb' => 50, 'max_files_per_op' => 10, 'file_ops_per_day' => null, 'links_per_day' => 0,
-            'retention_minutes' => 120, 'custom_alias_max' => null, 'link_custom_expiry' => true, 'queue' => 'pro',
-            'ads' => false, 'tool_qr_code_custom_color' => true,
+            'retention_minutes' => 120, 'link_custom_expiry' => true, 'queue' => 'pro',
+            'ads' => false, 'tool_shorten_custom_alias' => true, 'tool_qr_code_custom_color' => true,
         ]);
 
         $this->assertSame([
@@ -51,10 +51,10 @@ class PricingTest extends TestCase
             '10 file per proses',
             'Proses file tanpa batas harian',
             'Hasil disimpan 2 jam',
-            'Alias link kustom tanpa batas',
             'Atur kedaluwarsa link',
             'Antrean proses prioritas',
             'Bebas iklan',
+            'Alias kustom',
             'Pemilih warna kustom',
         ], $lines);
     }

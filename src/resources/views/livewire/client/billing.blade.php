@@ -4,7 +4,7 @@
     use Illuminate\Support\Carbon;
 
     // Kontrak: $tier, $planUntil, $plans, $payments, $pendingPayment, $pollPending, $canPurchase, $billingEnabled, $upgradePreview, $selectedPeriod,
-    // $methods, $activePayment, $activePayable, $qrImage, $canSimulate.
+    // $methods (code => logo_path), $channels (code => PaymentChannel), $activePayment, $activePayable, $qrImage, $canSimulate.
     $tz = 'Asia/Jakarta';
     $rp = fn ($v) => 'Rp' . number_format((int) $v, 0, ',', '.');
     $val = fn ($v) => $v instanceof \BackedEnum ? $v->value : $v;
@@ -68,7 +68,7 @@
 
     // Pembayaran in-app yang masih bisa dibayar (invoice lama hanya ditampilkan statusnya).
     $paymentRows = $payments ? collect(method_exists($payments, 'items') ? $payments->items() : $payments) : collect();
-    $isPayable = fn ($p) => $val($p->status) === 'pending' && $p->xendit_payment_request_id && $p->expires_at && Carbon::parse($p->expires_at)->isFuture();
+    $isPayable = fn ($p) => $val($p->status) === 'pending' && $p->isInApp() && $p->expires_at && Carbon::parse($p->expires_at)->isFuture();
     $isOpen = fn ($p) => $val($p->status) === 'pending' && (! $p->expires_at || Carbon::parse($p->expires_at)->isFuture());
     $openPayment = $paymentRows->first(fn ($p) => $isPayable($p));
 
@@ -85,7 +85,7 @@
 
 <div class="mx-auto max-w-4xl space-y-6">
 
-    {{-- Hasil kembali dari Xendit --}}
+    {{-- Hasil kembali dari halaman pembayaran --}}
     @if($returned)
         <div aria-live="polite" wire:key="return-{{ $returned->id }}-{{ $returnedExpired ? 'expired' : $returnedStatus }}">
             @if($returnedStatus === 'paid')
@@ -108,7 +108,7 @@
                         <div class="min-w-0 flex-1 text-sm">
                             <p class="font-semibold">Pembayaran sedang diverifikasi</p>
                             @if($polling)
-                                <p class="mt-0.5">Kami menunggu konfirmasi dari Xendit untuk order <span class="font-mono">{{ $returned->order_id }}</span>. Halaman ini diperbarui otomatis — biasanya kurang dari satu menit.</p>
+                                <p class="mt-0.5">Kami menunggu konfirmasi dari penyedia pembayaran untuk order <span class="font-mono">{{ $returned->order_id }}</span>. Halaman ini diperbarui otomatis — biasanya kurang dari satu menit.</p>
                             @else
                                 <p class="mt-0.5">Belum ada konfirmasi untuk order <span class="font-mono">{{ $returned->order_id }}</span>. Jika sudah membayar, cek status sebentar lagi.</p>
                             @endif
@@ -355,14 +355,19 @@
             $orderAmount = $activePayment?->amount ?? ($order[$orderPeriod] ?? 0);
             $activeStatus = $activePayment ? $val($activePayment->status) : null;
             $activeChannel = $activePayment?->channel();
+            $activeLogo = $activePayment ? \App\Models\PaymentMethod::logoUrl($methods[$activePayment->payment_channel] ?? null) : null;
+            $activeCard = $activeChannel?->kind === \App\Enums\PaymentChannelKind::Card;
             $display = $activePayment?->payDisplay();
             $secondsLeft = $activePayable ? max(0, $activePayment->expires_at->getTimestamp() - now()->getTimestamp()) : 0;
             $tileClass = 'flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-3 text-sm transition-colors hover:border-line-strong has-[:checked]:border-line-strong has-[:checked]:bg-tool/15 has-[:checked]:ring-1 has-[:checked]:ring-fg has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-fg has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60';
             // Active methods grouped by kind, in admin order.
             $methodGroups = collect($methods)
-                ->map(fn ($name, $code) => ['channel' => \App\Enums\PaymentChannel::from($code), 'name' => $name])
-                ->groupBy(fn ($m) => $m['channel']->kind()->value);
-            $kindHints = ['qris' => 'Scan dari e-wallet atau mobile banking.', 'va' => 'Transfer dari ATM atau m-banking.', 'ewallet' => 'Konfirmasi di aplikasi e-wallet.'];
+                ->map(fn ($logoPath, $code) => ['code' => $code, 'channel' => $channels->get($code), 'logo' => \App\Models\PaymentMethod::logoUrl($logoPath)])
+                ->filter(fn ($m) => $m['channel'] !== null)
+                ->groupBy(fn ($m) => $m['channel']->kind->value);
+            // Channels that confirm by push notification need the customer's number.
+            $mobileChannels = $methodGroups->flatten(1)->filter(fn ($m) => $m['channel']->needs_mobile_number)->pluck('code')->values()->all();
+            $kindHints = ['qris' => 'Scan dari e-wallet atau mobile banking.', 'va' => 'Transfer dari ATM atau m-banking.', 'ewallet' => 'Konfirmasi di aplikasi e-wallet.', 'card' => 'Isi data kartu di halaman pembayaran aman.'];
         @endphp
         <div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="checkout-title"
             x-data x-trap.noscroll="true" @keydown.escape.window="$wire.closeCheckout()" wire:key="checkout-modal">
@@ -388,7 +393,7 @@
 
                 @if(! $activePayment)
                     {{-- Langkah 1: pilih metode --}}
-                    {{-- Locked while Xendit creates the code, so clicks cannot look like a method change. --}}
+                    {{-- Locked while the gateway creates the code, so clicks cannot look like a method change. --}}
                     <fieldset class="mt-5" wire:loading.attr="disabled" wire:target="pay">
                         <legend class="label">Metode pembayaran</legend>
                         @if($methods)
@@ -399,10 +404,13 @@
                                         <p class="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{{ $kind->label() }} <span class="font-normal normal-case tracking-normal">· {{ $kindHints[$kind->value] }}</span></p>
                                         <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
                                             @foreach($methodGroups[$kind->value] as $method)
-                                                <label wire:key="channel-{{ $method['channel']->value }}" class="{{ $tileClass }} gap-2 px-2.5 py-2.5">
-                                                    <input type="radio" wire:model="channel" value="{{ $method['channel']->value }}" class="sr-only">
-                                                    <x-payment-badge :channel="$method['channel']" class="w-[4.5rem]" />
-                                                    <span class="line-clamp-2 min-w-0 text-[13px] font-medium leading-tight text-fg">{{ $method['name'] }}</span>
+                                                <label wire:key="channel-{{ $method['code'] }}" class="{{ $tileClass }} justify-center px-2.5 py-2.5">
+                                                    <input type="radio" wire:model="channel" value="{{ $method['code'] }}" class="sr-only">
+                                                    {{-- Logo or channel badge only; screen readers get the channel name (logo alt or sr-only text). --}}
+                                                    <x-payment-badge :channel="$method['channel']" :logo="$method['logo']" :alt="$method['channel']->fullLabel()" class="w-[4.5rem]" />
+                                                    @unless($method['logo'])
+                                                        <span class="sr-only">{{ $method['channel']->fullLabel() }}</span>
+                                                    @endunless
                                                 </label>
                                             @endforeach
                                         </div>
@@ -410,11 +418,11 @@
                                 @endforeach
                             </div>
 
-                            @if(isset($methods[\App\Enums\PaymentChannel::Ovo->value]))
-                                <div class="mt-4" x-show="$wire.channel === @js(\App\Enums\PaymentChannel::Ovo->value)" x-cloak>
-                                    <label for="ovo-number" class="label">Nomor HP terdaftar di OVO</label>
-                                    <input id="ovo-number" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" wire:model="mobileNumber" placeholder="0812xxxxxxxx" class="input">
-                                    <p class="mt-1.5 text-xs text-muted">Notifikasi pembayaran dikirim ke aplikasi OVO di nomor ini.</p>
+                            @if($mobileChannels)
+                                <div class="mt-4" x-show="@js($mobileChannels).includes($wire.channel)" x-cloak>
+                                    <label for="wallet-number" class="label">Nomor HP terdaftar di e-wallet</label>
+                                    <input id="wallet-number" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" wire:model="mobileNumber" placeholder="0812xxxxxxxx" aria-describedby="wallet-number-help" class="input">
+                                    <p id="wallet-number-help" class="mt-1.5 text-xs text-muted">Notifikasi pembayaran dikirim ke aplikasi e-wallet di nomor ini.</p>
                                 </div>
                             @endif
                         @else
@@ -429,8 +437,8 @@
                         <span wire:loading.remove wire:target="pay">Lanjut bayar</span>
                         <span wire:loading wire:target="pay">Menyiapkan…</span>
                     </button>
-                    <p class="mt-3 text-center text-xs text-muted" wire:loading.remove wire:target="pay">Diproses aman oleh Xendit. Paket aktif otomatis setelah pembayaran diterima.</p>
-                    <p class="mt-3 text-center text-xs text-muted" wire:loading.block wire:target="pay" role="status">Menghubungi Xendit, bisa sampai 30 detik.</p>
+                    <p class="mt-3 text-center text-xs text-muted" wire:loading.remove wire:target="pay">Diproses aman oleh payment gateway. Paket aktif otomatis setelah pembayaran diterima.</p>
+                    <p class="mt-3 text-center text-xs text-muted" wire:loading.block wire:target="pay" role="status">Menghubungi penyedia pembayaran, bisa sampai 30 detik.</p>
 
                 @elseif($activeStatus === 'paid')
                     {{-- Berhasil --}}
@@ -451,16 +459,16 @@
                         @if($display === \App\Models\Payment::DISPLAY_QR)
                             <div class="mt-5 flex flex-col items-center">
                                 <div class="rounded-xl border border-line bg-white p-3">
-                                    <img src="{{ $qrImage }}" width="240" height="240" alt="Kode QR {{ $activeChannel?->label() }} untuk order {{ $activePayment->order_id }}" class="h-60 w-60">
+                                    <img src="{{ $qrImage }}" width="240" height="240" alt="Kode QR {{ $activeChannel?->name }} untuk order {{ $activePayment->order_id }}" class="h-60 w-60">
                                 </div>
                                 <p class="mt-3 max-w-xs text-center text-sm text-muted">
-                                    {{ $activeChannel?->isQris() ? 'Scan dengan aplikasi e-wallet atau mobile banking yang mendukung QRIS.' : 'Scan dengan aplikasi '.$activeChannel?->label().'.' }}
+                                    {{ $activeChannel?->kind === \App\Enums\PaymentChannelKind::Qris ? 'Scan dengan aplikasi e-wallet atau mobile banking yang mendukung QRIS.' : 'Scan dengan aplikasi '.$activeChannel?->name.'.' }}
                                 </p>
                                 <a href="{{ $qrImage }}" download="qr-{{ $activePayment->order_id }}.png" class="btn-ghost btn-sm mt-2">Unduh QR</a>
                             </div>
                         @elseif($display === \App\Models\Payment::DISPLAY_VA)
                             <div class="mt-5" x-data="{ copied: false }">
-                                <p class="label">Nomor Virtual Account {{ $activeChannel?->label() }}</p>
+                                <p class="label">Nomor Virtual Account {{ $activeChannel?->name }}</p>
                                 <div class="flex items-center justify-between gap-3 rounded-xl border border-line bg-fg/4 px-4 py-3">
                                     <span class="break-all font-mono text-lg font-bold tracking-wider tabular-nums text-fg">{{ trim(chunk_split($activePayment->pay_code, 4, ' ')) }}</span>
                                     <button type="button" class="btn-secondary btn-sm shrink-0"
@@ -469,25 +477,28 @@
                                     </button>
                                 </div>
                                 <ol class="mt-4 list-decimal space-y-1.5 pl-5 text-sm text-muted">
-                                    <li>Buka mobile banking, internet banking, atau ATM {{ $activeChannel?->label() }}.</li>
+                                    <li>Buka mobile banking, internet banking, atau ATM {{ $activeChannel?->name }}.</li>
                                     <li>Pilih menu transfer ke Virtual Account, lalu masukkan nomor di atas.</li>
                                     <li>Pastikan nominal {{ $rp($activePayment->amount) }}, lalu konfirmasi.</li>
                                 </ol>
                             </div>
                         @elseif($display === \App\Models\Payment::DISPLAY_LINK)
                             <div class="mt-5 flex flex-col items-center text-center">
-                                <x-payment-badge :channel="$activeChannel" class="h-10 w-24 text-xs" />
-                                <p class="mt-3 max-w-xs text-sm text-muted">Konfirmasi pembayaran di {{ $activeChannel?->label() }}. Halaman ini otomatis diperbarui setelah pembayaran diterima.</p>
+                                <x-payment-badge :channel="$activeChannel" :logo="$activeLogo" class="h-10 w-24 text-xs" />
+                                <p class="mt-3 max-w-xs text-sm text-muted">
+                                    {{ $activeCard ? 'Isi data kartu di halaman pembayaran aman. Nomor kartu tidak pernah disimpan di '.config('app.name').'.' : 'Konfirmasi pembayaran di '.$activeChannel?->name.'.' }}
+                                    Halaman ini otomatis diperbarui setelah pembayaran diterima.
+                                </p>
                                 <a href="{{ $activePayment->pay_code }}" target="_blank" rel="noopener noreferrer" class="btn-primary mt-4">
-                                    Buka {{ $activeChannel?->label() }}
+                                    {{ $activeCard ? 'Buka halaman pembayaran' : 'Buka '.$activeChannel?->name }}
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                                     <span class="sr-only">(tab baru)</span>
                                 </a>
                             </div>
                         @else
                             <div class="mt-5 flex flex-col items-center text-center">
-                                <x-payment-badge :channel="$activeChannel" class="h-10 w-24 text-xs" />
-                                <p class="mt-3 font-semibold text-fg">Cek notifikasi di aplikasi {{ $activeChannel?->label() }}</p>
+                                <x-payment-badge :channel="$activeChannel" :logo="$activeLogo" class="h-10 w-24 text-xs" />
+                                <p class="mt-3 font-semibold text-fg">Cek notifikasi di aplikasi {{ $activeChannel?->name }}</p>
                                 <p class="mt-1 max-w-xs text-sm text-muted">Buka notifikasi pembayaran {{ $rp($activePayment->amount) }} dari {{ config('app.name') }}, lalu konfirmasi dengan PIN.</p>
                             </div>
                         @endif
@@ -506,7 +517,7 @@
 
                         @if($canSimulate)
                             <div class="mt-4 rounded-xl border border-dashed border-line-strong px-4 py-3">
-                                <p class="text-xs text-muted">Mode test Xendit: tidak ada uang yang ditarik.</p>
+                                <p class="text-xs text-muted">Mode test: tidak ada uang yang ditarik.</p>
                                 <button type="button" class="btn-secondary btn-sm mt-2 w-full" wire:click="simulatePayment" wire:loading.attr="disabled" wire:target="simulatePayment">
                                     <span wire:loading.remove wire:target="simulatePayment">Simulasikan pembayaran</span>
                                     <span wire:loading wire:target="simulatePayment">Mengirim simulasi…</span>

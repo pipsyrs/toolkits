@@ -12,6 +12,7 @@ use App\Services\Quota\QuotaService;
 use App\Services\Tier\PlanLimits;
 use App\Services\Tier\Tier;
 use App\Services\Tier\TierResolver;
+use App\Services\Tools\ToolCatalog;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ class CreateShortLink
         protected PlanLimits $plans,
         protected QuotaService $quota,
         protected ShortCodeGenerator $codes,
+        protected ToolCatalog $catalog,
     ) {}
 
     /**
@@ -47,13 +49,8 @@ class CreateShortLink
             'expires_at' => is_string($data['expires_at'] ?? null) && $data['expires_at'] !== '' ? $data['expires_at'] : null,
         ];
 
-        // custom_alias_max: null = unlimited, 0 or missing = not allowed. Aliases are counted per account, so they need one.
-        $aliasAllowed = ! $tier->isGuest()
-            && array_key_exists('custom_alias_max', $limits)
-            && ($limits['custom_alias_max'] === null || (int) $limits['custom_alias_max'] > 0);
-
-        if ($input['alias'] !== null && ! $aliasAllowed) {
-            throw ValidationException::withMessages(['alias' => 'Alias kustom hanya untuk akun terdaftar dan terverifikasi.']);
+        if ($input['alias'] !== null && ! $this->catalog->canUseFeature('shorten', 'custom_alias', $tier)) {
+            throw ValidationException::withMessages(['alias' => 'Alias kustom hanya tersedia di paket berbayar.']);
         }
 
         if ($input['expires_at'] !== null && empty($limits['link_custom_expiry'])) {
@@ -72,7 +69,7 @@ class CreateShortLink
         try {
             return DB::transaction(function () use ($user, $tier, $limits, $guestId, $ip, $alias, $targetUrl, $targetHost, $expiresAt) {
                 if ($user !== null && ! $tier->isGuest()) {
-                    $this->checkAccountLimits($user, $limits, $alias !== null);
+                    $this->checkAccountLimits($user, $limits);
                 }
 
                 $subjects = $this->quota->subjectsFor($user, $tier, $guestId, $ip);
@@ -122,7 +119,7 @@ class CreateShortLink
     }
 
     // Serialised per user via row lock (ADR-002).
-    protected function checkAccountLimits(User $user, array $limits, bool $isCustom): void
+    protected function checkAccountLimits(User $user, array $limits): void
     {
         User::query()->whereKey($user->getKey())->lockForUpdate()->first();
 
@@ -131,14 +128,6 @@ class CreateShortLink
         if ($activeMax !== null && Link::query()->where('user_id', $user->getKey())->active()->count() >= $activeMax) {
             throw ValidationException::withMessages([
                 'target_url' => "Batas {$activeMax} link aktif tercapai. Hapus link lama atau upgrade ke Pro.",
-            ]);
-        }
-
-        $aliasMax = $limits['custom_alias_max'] ?? null;
-
-        if ($isCustom && $aliasMax !== null && Link::query()->where('user_id', $user->getKey())->where('is_custom', true)->count() >= $aliasMax) {
-            throw ValidationException::withMessages([
-                'alias' => "Batas {$aliasMax} alias kustom tercapai. Upgrade ke Pro untuk alias tanpa batas.",
             ]);
         }
     }

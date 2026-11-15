@@ -107,7 +107,6 @@ class RolePermissionQaTest extends TestCase
 
     public function test_http_route_matrix_per_single_permission(): void
     {
-        $editable = $this->role('editable', ['admin.access']);
         $routes = [
             '/admin' => 'admin.access',
             '/admin/users' => 'users.view',
@@ -116,8 +115,6 @@ class RolePermissionQaTest extends TestCase
             '/admin/audit-logs' => 'audit.view',
             '/admin/settings' => 'settings.manage',
             '/admin/roles' => 'roles.manage',
-            '/admin/roles/create' => 'roles.manage',
-            "/admin/roles/{$editable->id}/edit" => 'roles.manage',
         ];
 
         foreach (array_merge(['admin.access'], $this->featurePermissions()) as $permission) {
@@ -160,26 +157,26 @@ class RolePermissionQaTest extends TestCase
         $link = Link::factory()->create();
         $victimRole = $this->role('victim', []);
 
-        // uri => [method, params, permissions needed]
+        // [uri, method, params, permissions needed]
         $actions = [
-            '/admin/users' => ['block', [$target->id, 'Spam link'], ['users.view', 'users.block']],
-            '/admin/links' => ['disable', [$link->id, 'Phishing'], ['links.view', 'links.moderate']],
-            '/admin/plans' => ['save', [], ['plans.manage']],
-            '/admin/audit-logs' => ['$refresh', [], ['audit.view']],
-            '/admin/settings' => ['save', [], ['settings.manage']],
-            '/admin/roles' => ['delete', [$victimRole->id], ['roles.manage']],
-            '/admin/roles/create' => ['save', [], ['roles.manage']],
+            ['/admin/users', 'block', [$target->id, 'Spam link'], ['users.view', 'users.block']],
+            ['/admin/links', 'disable', [$link->id, 'Phishing'], ['links.view', 'links.moderate']],
+            ['/admin/plans', 'save', [], ['plans.manage']],
+            ['/admin/audit-logs', '$refresh', [], ['audit.view']],
+            ['/admin/settings', 'save', [], ['settings.manage']],
+            ['/admin/roles', 'delete', [$victimRole->id], ['roles.manage']],
+            ['/admin/roles', 'save', [], ['roles.manage']],
         ];
 
         $snapshots = [];
-        foreach (array_keys($actions) as $uri) {
+        foreach (array_unique(array_column($actions, 0)) as $uri) {
             $snapshots[$uri] = $this->snapshotOf($admin, $uri);
         }
 
         foreach ($this->featurePermissions() as $permission) {
             $user = $this->userWithRole('lw-'.str_replace('.', '-', $permission), ['admin.access', $permission]);
 
-            foreach ($actions as $uri => [$method, $params, $needed]) {
+            foreach ($actions as [$uri, $method, $params, $needed]) {
                 if ($needed === [$permission]) {
                     continue;
                 }
@@ -285,7 +282,7 @@ class RolePermissionQaTest extends TestCase
     public function test_selected_tampering_in_role_form_via_replay(): void
     {
         $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage', 'links.view']);
-        $snapshot = $this->snapshotOf($manager, '/admin/roles/create');
+        $snapshot = $this->snapshotOf($manager, '/admin/roles');
 
         $this->replay($manager, $snapshot, 'save', [], ['name' => 'escalate', 'selected' => ['links.view', 'roles.manage', 'settings.manage']])
             ->assertOk();
@@ -301,9 +298,9 @@ class RolePermissionQaTest extends TestCase
     {
         $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage']);
         $super = Role::findByName(User::SUPERADMIN_ROLE, 'web');
-        $snapshot = $this->snapshotOf($manager, '/admin/roles/create');
+        $snapshot = $this->snapshotOf($manager, '/admin/roles');
 
-        $this->assertFalse($this->replay($manager, $snapshot, 'save', [], ['roleId' => $super->id, 'name' => 'hijack'])->isSuccessful());
+        $this->assertFalse($this->replay($manager, $snapshot, 'save', [], ['editingId' => $super->id, 'name' => 'hijack'])->isSuccessful());
         $this->assertSame(User::SUPERADMIN_ROLE, $super->fresh()->name);
         $this->assertNull(Role::where('name', 'hijack')->first());
     }
@@ -315,8 +312,11 @@ class RolePermissionQaTest extends TestCase
         $own = Role::findByName('role-manager', 'web');
         $super = Role::findByName(User::SUPERADMIN_ROLE, 'web');
 
+        $list = $this->snapshotOf($manager, '/admin/roles');
+
         foreach ([$super, $own, $bigger] as $role) {
-            $snapshot = $this->snapshotOf($manager, "/admin/roles/{$role->id}/edit");
+            // Opening a locked role is read-only; saving it must still be refused.
+            $snapshot = $this->replay($manager, $list, 'openEdit', [$role->id])->assertOk()->json('components.0.snapshot');
             $this->replay($manager, $snapshot, 'save', [], ['name' => 'renamed-'.$role->getKey(), 'selected' => ['admin.access', 'roles.manage']])
                 ->assertForbidden();
         }
@@ -406,7 +406,7 @@ class RolePermissionQaTest extends TestCase
         $editable = $this->role('editable', []);
         session($this->confirmed());
 
-        foreach (['/admin', '/admin/users', '/admin/links', '/admin/plans', '/admin/audit-logs', '/admin/settings', '/admin/roles', '/admin/roles/create', "/admin/roles/{$editable->id}/edit"] as $uri) {
+        foreach (['/admin', '/admin/users', '/admin/links', '/admin/plans', '/admin/audit-logs', '/admin/settings', '/admin/roles'] as $uri) {
             $this->actingAs($admin)->withSession($this->confirmed())->get($uri)->assertOk();
         }
 
@@ -528,7 +528,7 @@ class RolePermissionQaTest extends TestCase
         $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage', 'users.view', 'users.roles']);
         $target = User::factory()->create();
 
-        $form = $this->snapshotOf($manager, '/admin/roles/create');
+        $form = $this->snapshotOf($manager, '/admin/roles');
         $this->assertFalse($this->replay($manager, $form, 'save', [], ['name' => 'typed', 'selected' => 'settings.manage'])->isSuccessful());
         $this->assertFalse($this->replay($manager, $form, 'save', [], ['name' => ['x'], 'selected' => []])->isSuccessful());
 

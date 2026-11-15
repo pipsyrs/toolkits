@@ -28,7 +28,6 @@ class PlanSeeder extends Seeder
                     'links_per_day' => 20,
                     'links_active_max' => 100,
                     'link_lifetime_days' => null,
-                    'custom_alias_max' => 5,
                     'link_custom_expiry' => false,
                     'link_password' => false,
                     'link_edit' => true,
@@ -41,8 +40,6 @@ class PlanSeeder extends Seeder
                     'interstitial' => false,
                     'export_csv' => false,
                     'api' => false,
-                    // Visitors without an account share an IP (NAT); the IP cap is this × the daily limit.
-                    'ip_limit_multiplier' => 3,
                 ],
             ],
             [
@@ -59,7 +56,6 @@ class PlanSeeder extends Seeder
                     'links_per_day' => null,
                     'links_active_max' => null,
                     'link_lifetime_days' => null,
-                    'custom_alias_max' => null,
                     'link_custom_expiry' => true,
                     'link_password' => true,
                     'link_edit' => true,

@@ -73,6 +73,45 @@ class ManagePlanLimits
     }
 
     /**
+     * One gated tool feature belongs to one plan (or none): set its key true on the chosen plan, false on every other.
+     *
+     * @throws ValidationException
+     */
+    public function setFeature(User $admin, string $tool, string $feature, string $owner, ?string $ip = null): void
+    {
+        $key = Entitlements::toolKey($tool, $feature);
+        $entry = $this->entitlements->all()[$key] ?? null;
+
+        if ($entry === null || empty($entry['feature'])) {
+            throw ValidationException::withMessages(['feature' => 'Fitur tidak dikenal.']);
+        }
+
+        DB::transaction(function () use ($admin, $key, $owner, $ip) {
+            $plans = Plan::query()->orderBy('sort')->lockForUpdate()->get();
+
+            if ($owner !== '' && ! $plans->contains('slug', $owner)) {
+                throw ValidationException::withMessages(['feature' => 'Paket tidak ditemukan.']);
+            }
+
+            foreach ($plans as $plan) {
+                Gate::forUser($admin)->authorize('update', $plan);
+
+                $old = $plan->limits ?? [];
+                $value = $plan->slug === $owner;
+
+                if (($old[$key] ?? null) === $value) {
+                    continue;
+                }
+
+                $plan->forceFill(['limits' => [...$old, $key => $value]])->save();
+                $this->audit->log($admin, 'plan.update_limits', $plan, [$key => [$old[$key] ?? null, $value]], null, $ip);
+            }
+        });
+
+        $this->plans->flush();
+    }
+
+    /**
      * New paid plan, for sale right away; its limits start as a copy of Free.
      *
      * @param  array<string, mixed>  $data

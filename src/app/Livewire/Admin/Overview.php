@@ -13,7 +13,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Layout('layouts::admin')]
-#[Title('Ringkasan')]
+#[Title('Dashboard')]
 class Overview extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes;

@@ -3,10 +3,11 @@
 namespace App\Models;
 
 use App\Enums\BillingPeriod;
-use App\Enums\PaymentChannel;
 use App\Enums\PaymentChannelKind;
 use App\Enums\PaymentStatus;
+use App\Services\Billing\PaymentChannelCatalog;
 use Database\Factories\PaymentFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +25,7 @@ class Payment extends Model
         'order_id',
         'xendit_invoice_id',
         'xendit_payment_request_id',
+        'xendit_payment_session_id',
         'invoice_url',
         'pay_code',
         'plan',
@@ -62,9 +64,21 @@ class Payment extends Model
 
     public const DISPLAY_PUSH = 'push';
 
+    // Null when the channel was deleted from master data; payment_channel keeps the code for history.
     public function channel(): ?PaymentChannel
     {
-        return PaymentChannel::tryFrom((string) $this->payment_channel);
+        return app(PaymentChannelCatalog::class)->find($this->payment_channel);
+    }
+
+    // Created by in-app checkout (payment request or card session), not a legacy invoice.
+    public function isInApp(): bool
+    {
+        return $this->xendit_payment_request_id !== null || $this->xendit_payment_session_id !== null;
+    }
+
+    public function scopeInApp(Builder $query): void
+    {
+        $query->where(fn (Builder $q) => $q->whereNotNull('xendit_payment_request_id')->orWhereNotNull('xendit_payment_session_id'));
     }
 
     // How the checkout modal presents pay_code (null for legacy invoices).
@@ -73,8 +87,8 @@ class Payment extends Model
         $channel = $this->channel();
 
         return match (true) {
-            $channel === null || $this->xendit_payment_request_id === null => null,
-            $channel->kind() === PaymentChannelKind::VirtualAccount => self::DISPLAY_VA,
+            $channel === null || ! $this->isInApp() => null,
+            $channel->kind === PaymentChannelKind::VirtualAccount => self::DISPLAY_VA,
             $this->pay_code === null => self::DISPLAY_PUSH,
             str_starts_with($this->pay_code, 'https://') => self::DISPLAY_LINK,
             default => self::DISPLAY_QR,

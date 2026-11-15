@@ -14,6 +14,7 @@ class HandleXenditPaymentCallback
     public function __construct(
         private readonly XenditClient $xendit,
         private readonly SettlePayment $settle,
+        private readonly HandleCardSessionCallback $sessions,
     ) {}
 
     /**
@@ -43,6 +44,10 @@ class HandleXenditPaymentCallback
      */
     public function sync(Payment $payment): string
     {
+        if ($payment->xendit_payment_session_id !== null) {
+            return $this->sessions->sync($payment);
+        }
+
         $requestId = (string) $payment->xendit_payment_request_id;
 
         if ($requestId === '') {

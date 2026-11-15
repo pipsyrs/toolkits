@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Actions\Admin\ManagePlanLimits;
-use App\Enums\PaymentChannel;
 use App\Enums\PaymentStatus;
 use App\Exceptions\BillingException;
 use App\Livewire\Admin;
@@ -27,6 +26,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -61,6 +61,12 @@ class BillingTest extends TestCase
     // Link returned for e-wallet requests.
     private string $walletUrl = 'https://ewallet.example/authorize/abc';
 
+    /** @var array<string, array<string, mixed>> Card session state returned by GET /sessions/{id}. */
+    private array $sessions = [];
+
+    // Hosted page link returned for card sessions.
+    private string $cardUrl = 'https://checkout.example/session/abc';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -74,6 +80,8 @@ class BillingTest extends TestCase
         ]);
         Notification::fake();
         Sleep::fake();
+        // The gateway only accepts https return URLs.
+        URL::forceScheme('https');
         $this->fakeXendit();
     }
 
@@ -143,6 +151,38 @@ class BillingTest extends TestCase
                 return Http::response($this->requests[$id]);
             }
 
+            if ($request->method() === 'POST' && $path === '/sessions') {
+                $id = 'ps-'.Str::random(24);
+                $this->sessions[$id] = [
+                    'payment_session_id' => $id,
+                    'reference_id' => $request['reference_id'],
+                    'status' => 'ACTIVE',
+                    'amount' => $request['amount'],
+                    'currency' => $request['currency'],
+                    'allowed_payment_channels' => $request['allowed_payment_channels'],
+                    'expires_at' => $request['expires_at'],
+                    'payment_link_url' => $this->cardUrl,
+                ];
+
+                return Http::response($this->sessions[$id], 201);
+            }
+
+            if (preg_match('#^/sessions/([^/]+)(/cancel)?$#', $path, $m) === 1) {
+                if (! isset($this->sessions[$m[1]])) {
+                    return Http::response(['error_code' => 'NOT_FOUND'], 404);
+                }
+
+                if (($m[2] ?? '') === '/cancel') {
+                    if ($this->sessions[$m[1]]['status'] !== 'ACTIVE') {
+                        return Http::response(['error_code' => 'INVALID_SESSION_STATUS'], 422);
+                    }
+
+                    $this->sessions[$m[1]]['status'] = 'CANCELED';
+                }
+
+                return Http::response($this->sessions[$m[1]]);
+            }
+
             if ($request->method() === 'GET' && str_starts_with($path, '/v2/invoices/')) {
                 $id = substr($path, strlen('/v2/invoices/'));
 
@@ -162,9 +202,9 @@ class BillingTest extends TestCase
             ->call('pay');
     }
 
-    private function activate(PaymentChannel ...$channels): void
+    private function activate(string ...$channels): void
     {
-        PaymentMethod::query()->whereIn('channel', array_column($channels, 'value'))->update(['is_active' => true]);
+        PaymentMethod::query()->whereIn('channel', $channels)->update(['is_active' => true]);
         app(PaymentMethodCatalog::class)->forget();
     }
 
@@ -322,7 +362,7 @@ class BillingTest extends TestCase
 
     public function test_unactivated_channel_shows_friendly_message(): void
     {
-        $this->activate(PaymentChannel::LinkAja);
+        $this->activate('LINKAJA');
         $this->createError = 'CHANNEL_UNAVAILABLE';
 
         $component = $this->checkout(User::factory()->create(), 'pro', 'monthly', 'LINKAJA')->assertHasErrors('checkout');
@@ -347,7 +387,7 @@ class BillingTest extends TestCase
 
     public function test_ewallet_checkout_shows_link_and_returns_to_status_page(): void
     {
-        $this->activate(PaymentChannel::Dana);
+        $this->activate('DANA');
         $user = User::factory()->create();
 
         $component = $this->checkout($user, 'pro', 'monthly', 'DANA')->assertHasNoErrors();
@@ -363,9 +403,128 @@ class BillingTest extends TestCase
             && ! isset($r['channel_properties']['expires_at']));
     }
 
+    public function test_card_checkout_opens_hosted_page_without_card_data(): void
+    {
+        Carbon::setTestNow('2026-11-15 03:00:00');
+        $this->activate('CARD');
+        $user = User::factory()->create();
+
+        $component = $this->checkout($user, 'pro', 'monthly', 'CARD')->assertHasNoErrors();
+
+        $payment = Payment::sole();
+        $this->assertSame('CARDS', $payment->payment_method);
+        $this->assertSame('CARD', $payment->payment_channel);
+        $this->assertNull($payment->xendit_payment_request_id);
+        $this->assertStringStartsWith('ps-', (string) $payment->xendit_payment_session_id);
+        $this->assertSame($this->cardUrl, $payment->pay_code);
+        // Configured expiry (60 min) applies; the session minimum is only a floor.
+        $this->assertTrue($payment->expires_at->equalTo(now()->addMinutes(60)));
+        $component->assertSee('Buka halaman pembayaran')->assertSee('href="'.$this->cardUrl.'"', false)->assertDontSee('Xendit');
+
+        Http::assertSent(fn (Request $r) => $r->method() === 'POST' && str_ends_with($r->url(), '/sessions')
+            && $r['session_type'] === 'PAY' && $r['mode'] === 'PAYMENT_LINK'
+            && $r['allowed_payment_channels'] === ['CARDS']
+            && $r['amount'] === $payment->amount
+            && $r['success_return_url'] === route('dashboard.billing.return', $payment)
+            && ! isset($r['card_details']) && ! isset($r['channel_properties']));
+
+        // Double click reuses the open session.
+        $component->call('pay')->assertHasNoErrors();
+        $this->assertSame(1, Payment::count());
+    }
+
+    public function test_card_session_settles_only_from_refetched_state(): void
+    {
+        Carbon::setTestNow('2026-11-15 03:00:00');
+        $this->activate('CARD');
+        $user = User::factory()->create();
+        $this->checkout($user, 'pro', 'monthly', 'CARD');
+        $payment = Payment::sole();
+        $id = $payment->xendit_payment_session_id;
+        $webhook = fn (string $event = 'payment_session.completed') => $this->postJson('/webhooks/xendit/payments', [
+            'event' => $event,
+            'business_id' => 'biz',
+            'data' => ['payment_session_id' => $id, 'reference_id' => $payment->order_id, 'status' => 'COMPLETED', 'amount' => $payment->amount],
+        ], ['x-callback-token' => self::TOKEN]);
+
+        // Forged "completed" while the gateway still says ACTIVE.
+        $webhook()->assertOk();
+        $this->assertSame(PaymentStatus::Pending, $payment->fresh()->status);
+
+        // Amount lower than the order.
+        $this->sessions[$id] = array_merge($this->sessions[$id], ['status' => 'COMPLETED', 'amount' => 1000]);
+        $webhook('payment_session.updated')->assertOk();
+        $this->assertSame(PaymentStatus::Pending, $payment->fresh()->status);
+
+        $this->sessions[$id] = array_merge($this->sessions[$id], ['amount' => $payment->amount, 'updated' => now()->toIso8601ZuluString()]);
+        $webhook('payment_session.paid')->assertOk();
+        $this->assertSame(PaymentStatus::Paid, $payment->fresh()->status);
+        $this->assertSame('pro', $user->fresh()->plan);
+
+        $this->postJson('/webhooks/xendit/payments', ['event' => 'payment_session.completed', 'data' => ['payment_session_id' => '../x']], ['x-callback-token' => self::TOKEN])->assertStatus(422);
+        $this->postJson('/webhooks/xendit/payments', ['event' => 'payment_session.completed', 'data' => ['payment_session_id' => $id]])->assertUnauthorized();
+    }
+
+    public function test_card_session_is_synced_by_return_page_and_can_be_canceled(): void
+    {
+        $this->activate('CARD');
+        $user = User::factory()->create();
+        $component = $this->checkout($user, 'pro', 'monthly', 'CARD');
+        $payment = Payment::sole();
+
+        $component->call('cancelPayment')->assertHasNoErrors()->assertSet('checkoutOpen', false);
+        $this->assertSame(PaymentStatus::Canceled, $payment->fresh()->status);
+        $this->assertSame('CANCELED', $this->sessions[$payment->xendit_payment_session_id]['status']);
+
+        // Return page polling settles a session even when the webhook never arrives.
+        RateLimiter::clear('checkout:'.$user->getKey());
+        $this->checkout($user, 'pro', 'monthly', 'CARD');
+        $second = Payment::query()->latest('created_at')->latest('id')->where('status', PaymentStatus::Pending->value)->sole();
+        $this->sessions[$second->xendit_payment_session_id] = array_merge($this->sessions[$second->xendit_payment_session_id], ['status' => 'COMPLETED']);
+
+        Livewire::actingAs($user)->test(Billing::class, ['payment' => $second->id])->call('checkStatus');
+        $this->assertSame(PaymentStatus::Paid, $second->fresh()->status);
+    }
+
+    public function test_http_return_url_is_never_sent_to_gateway(): void
+    {
+        URL::forceScheme('http');
+        $this->activate('CARD', 'DANA');
+        $user = User::factory()->create();
+
+        $this->checkout($user, 'pro', 'monthly', 'CARD')->assertHasErrors('checkout');
+        $this->checkout($user, 'pro', 'monthly', 'DANA')->assertHasErrors('checkout');
+
+        $this->assertSame(2, Payment::query()->where('status', PaymentStatus::Failed->value)->count());
+        Http::assertNothingSent();
+
+        // QRIS sends no return URL, so it still works over plain http.
+        $this->checkout($user)->assertHasNoErrors();
+    }
+
+    public function test_forwarded_https_is_trusted_only_from_local_proxy(): void
+    {
+        URL::forceScheme(null);
+        Route::get('/_test/scheme', fn () => request()->getScheme().' '.request()->ip());
+        $headers = ['X-Forwarded-Proto' => 'https', 'X-Forwarded-For' => '203.0.113.9'];
+
+        $this->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])->get('http://localhost/_test/scheme', $headers)->assertSeeText('https 203.0.113.9');
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])->get('http://localhost/_test/scheme', $headers)->assertSeeText('http 198.51.100.7');
+    }
+
+    public function test_card_link_must_be_https(): void
+    {
+        $this->activate('CARD');
+        $this->cardUrl = 'http://checkout.example/session/abc';
+
+        $this->checkout(User::factory()->create(), 'pro', 'monthly', 'CARD')->assertHasErrors('checkout');
+
+        $this->assertSame(PaymentStatus::Failed, Payment::sole()->status);
+    }
+
     public function test_ewallet_link_must_be_https(): void
     {
-        $this->activate(PaymentChannel::Dana);
+        $this->activate('DANA');
         $this->walletUrl = 'javascript:alert(document.cookie)';
 
         $this->checkout(User::factory()->create(), 'pro', 'monthly', 'DANA')->assertHasErrors('checkout')->assertSet('activePaymentId', null);
@@ -377,7 +536,7 @@ class BillingTest extends TestCase
     public function test_ovo_sends_normalized_number_and_waits_for_push(): void
     {
         Carbon::setTestNow('2026-11-15 03:00:00');
-        $this->activate(PaymentChannel::Ovo);
+        $this->activate('OVO');
         $user = User::factory()->create();
 
         foreach (['', '12345', '0812', '+15551234567', str_repeat('8', 40)] as $invalid) {
@@ -509,7 +668,7 @@ class BillingTest extends TestCase
         Notification::assertSentTo($user, PaymentReceivedNotification::class);
 
         // E-wallet return page polls the same way.
-        $this->activate(PaymentChannel::Dana);
+        $this->activate('DANA');
         $walletUser = User::factory()->create();
         $wallet = $this->pendingPayment($walletUser, 'pro', 'monthly', 'DANA');
         $this->requests[$wallet->xendit_payment_request_id]['status'] = 'EXPIRED';
@@ -569,7 +728,7 @@ class BillingTest extends TestCase
         $this->assertSame(PaymentStatus::Paid, $payment->fresh()->status);
 
         // E-wallet links use Xendit's own sandbox page instead.
-        $this->activate(PaymentChannel::Dana);
+        $this->activate('DANA');
         $this->checkout(User::factory()->create(), 'pro', 'monthly', 'DANA')
             ->assertDontSee('Simulasikan pembayaran')
             ->call('simulatePayment')->assertHasErrors('checkout');

@@ -41,6 +41,18 @@ class PlanLimits
         return $slug === Tier::FREE ? Tier::free()->label() : ($this->plans()[(string) $slug]['name'] ?? (string) $slug);
     }
 
+    // Name of the cheapest plan (sort order) that unlocks a limit key, or null if none does.
+    public function planForLimit(string $key): ?string
+    {
+        foreach ($this->plans() as $plan) {
+            if (! empty($plan['limits'][$key])) {
+                return $plan['name'];
+            }
+        }
+
+        return null;
+    }
+
     /**
      * @return list<string>
      */

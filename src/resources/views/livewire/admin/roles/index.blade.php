@@ -1,7 +1,9 @@
 @php
-    // Kontrak: $roles (withCount users, permissions), $editable [id => bool], delete(id).
-    $roles = $roles ?? collect();
-    $editable = $editable ?? [];
+    // Kontrak: $roles (withCount users, permissions), $editable [id => bool], delete(id); form modal: $editing, $catalog, $grantable, $sensitive, $formLocked.
+    $groupLabels = [
+        'admin' => 'Area admin', 'users' => 'Pengguna', 'links' => 'Link', 'plans' => 'Plan',
+        'audit' => 'Audit log', 'roles' => 'Role', 'settings' => 'Pengaturan', 'payments' => 'Pembayaran', 'tools' => 'Alat', 'support' => 'Customer service',
+    ];
 @endphp
 
 <div class="space-y-5" x-data="{ open: false, roleId: null, roleName: '' }" @keydown.escape.window="open = false">
@@ -10,10 +12,9 @@
             <h2 class="text-xl font-bold text-fg">Role & permission</h2>
             <p class="mt-1 max-w-prose text-sm text-muted">Role menentukan menu dan aksi admin yang boleh dipakai. Anda hanya bisa memberi permission yang Anda miliki.</p>
         </div>
-        <a href="{{ route('admin.roles.create') }}"
-            class="shrink-0 btn-primary">
+        <button type="button" class="shrink-0 btn-primary" wire:click="openCreate" wire:loading.attr="disabled" wire:target="openCreate">
             + Role baru
-        </a>
+        </button>
     </div>
 
     @if(session('status'))
@@ -23,6 +24,9 @@
         <div class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">{{ session('error') }}</div>
     @endif
     @error('role')
+        <div class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">{{ $message }}</div>
+    @enderror
+    @error('list')
         <div class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">{{ $message }}</div>
     @enderror
 
@@ -64,7 +68,7 @@
                                 <td class="px-5 py-3">
                                     @if($canEdit)
                                         <div class="flex justify-end gap-2">
-                                            <a href="{{ route('admin.roles.edit', $role) }}" class="btn-secondary btn-sm">Edit</a>
+                                            <button type="button" class="btn-secondary btn-sm" wire:click="openEdit('{{ $role->id }}')">Edit</button>
                                             @if($usersCount > 0)
                                                 <button type="button" class="btn-ghost btn-sm" disabled
                                                     title="Masih dipakai {{ $usersCount }} pengguna">Hapus</button>
@@ -90,16 +94,98 @@
         @endif
     </div>
 
-    {{-- Konfirmasi hapus --}}
-    <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-role-title">
-        <div class="absolute inset-0 bg-ink/50 backdrop-blur-sm" @click="open = false"></div>
-        <div class="relative w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl" x-trap.noscroll="open">
-            <h2 id="delete-role-title" class="text-lg font-semibold text-fg">Hapus role</h2>
-            <p class="mt-1 text-sm text-muted">Role <span class="font-mono font-medium text-fg" x-text="roleName"></span> akan dihapus permanen. Tindakan ini dicatat di audit log.</p>
-            <div class="mt-5 flex justify-end gap-2">
-                <button type="button" class="btn-secondary" @click="open = false">Batal</button>
-                <button type="button" class="btn-danger" @click="$wire.delete(roleId); open = false">Hapus role</button>
+    {{-- Konfirmasi hapus (state Alpine: open, roleId, roleName) --}}
+    <x-dashboard.modal title="Hapus role">
+        <p class="text-sm text-muted">Role <span class="font-mono font-medium text-fg" x-text="roleName"></span> akan dihapus permanen. Tindakan ini dicatat di audit log.</p>
+        <x-slot:footer>
+            <button type="button" class="btn-secondary" @click="open = false">Batal</button>
+            <button type="button" class="btn-danger" @click="$wire.delete(roleId); open = false">Hapus role</button>
+        </x-slot:footer>
+    </x-dashboard.modal>
+
+    {{-- Form buat / edit role --}}
+    <x-dashboard.modal wire:model="formOpen" size="xl" :submit="$formLocked ? null : 'save'" :submit-label="$editing ? 'Simpan role' : 'Buat role'"
+        :title="$editing ? 'Edit role' : 'Role baru'"
+        description="Permission yang tidak Anda miliki tidak bisa diberikan. Memilih permission admin apa pun otomatis menyertakan Akses panel admin.">
+        <div class="space-y-4"
+            x-data
+            @change="
+                const t = $event.target;
+                if (t.name !== 'perm' || !t.checked || t.value === 'admin.access') return;
+                const a = $root.querySelector('input[name=perm][value=\'admin.access\']');
+                if (a && !a.checked && !a.disabled) { a.checked = true; a.dispatchEvent(new Event('change', { bubbles: false })); }
+            ">
+            @if($formLocked)
+                <div class="flex gap-3 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-warn" role="note">
+                    <svg class="mt-0.5 h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                    @if($name === 'superadmin')
+                        <p>Role <strong class="font-mono">superadmin</strong> terkunci dan selalu memiliki semua permission.</p>
+                    @else
+                        <p>Role ini tidak bisa Anda ubah: Anda memegang role ini, atau role berisi permission yang tidak Anda miliki.</p>
+                    @endif
+                </div>
+            @endif
+
+            <div>
+                <label for="role-name" class="label">Nama role</label>
+                <input id="role-name" type="text" wire:model="name" maxlength="40" autocomplete="off" spellcheck="false"
+                    placeholder="contoh: moderator" aria-describedby="role-name-help @error('name') role-name-error @enderror"
+                    @disabled($formLocked)
+                    @class(['input font-mono', 'border-danger' => $errors->has('name')])>
+                <p id="role-name-help" class="mt-1.5 text-xs text-muted">3–40 karakter: huruf kecil, angka, <code>-</code> atau <code>_</code>.</p>
+                @error('name') <p id="role-name-error" class="field-error">{{ $message }}</p> @enderror
             </div>
+
+            <section class="rounded-xl border border-line" aria-labelledby="perm-title">
+                <header class="border-b border-line px-4 py-3">
+                    <h3 id="perm-title" class="font-semibold text-fg">Permission</h3>
+                    @error('selected') <p class="field-error">{{ $message }}</p> @enderror
+                </header>
+
+                <div class="divide-y divide-line">
+                    @foreach($catalog as $group => $permissions)
+                        <fieldset class="grid gap-3 px-4 py-4 sm:grid-cols-[10rem_1fr]" wire:key="perm-group-{{ $group }}">
+                            <legend class="contents">
+                                <span class="text-sm font-medium text-fg">{{ $groupLabels[$group] ?? ucfirst($group) }}</span>
+                            </legend>
+                            <div class="space-y-2">
+                                @foreach($permissions as $value => $label)
+                                    @php
+                                        $canGrant = ! $formLocked && in_array($value, $grantable, true);
+                                        $permId = 'perm-' . str_replace('.', '-', $value);
+                                    @endphp
+                                    <label for="{{ $permId }}" wire:key="perm-{{ $value }}"
+                                        @class([
+                                            'flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm transition',
+                                            'border-line hover:border-ok cursor-pointer' => $canGrant,
+                                            'border-dashed border-line opacity-60 cursor-not-allowed' => ! $canGrant,
+                                        ])
+                                        @unless($canGrant) title="{{ $formLocked ? 'Role terkunci' : 'Anda tidak memiliki permission ini' }}" @endunless>
+                                        <input id="{{ $permId }}" type="checkbox" name="perm" value="{{ $value }}" wire:model="selected"
+                                            @disabled(! $canGrant)
+                                            class="mt-0.5 rounded border-line text-ok focus:ring-fg">
+                                        <span class="min-w-0 flex-1">
+                                            <span class="flex flex-wrap items-center gap-2">
+                                                <span class="font-medium text-fg">{{ $label }}</span>
+                                                @if(in_array($value, $sensitive, true))
+                                                    <span class="badge bg-danger/10 text-danger" title="Setara akses tinggi; berikan hanya ke orang tepercaya">
+                                                        <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                                                        sensitif
+                                                    </span>
+                                                @endif
+                                                @unless($canGrant || $formLocked)
+                                                    <span class="badge bg-fg/6 text-muted">tidak dimiliki</span>
+                                                @endunless
+                                            </span>
+                                            <span class="block font-mono text-xs text-muted">{{ $value }}</span>
+                                        </span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </fieldset>
+                    @endforeach
+                </div>
+            </section>
         </div>
-    </div>
+    </x-dashboard.modal>
 </div>

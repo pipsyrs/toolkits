@@ -135,7 +135,7 @@ class QuotaService
     }
 
     /**
-     * Enforced limit per subject (plan null → fair use cap, ip × multiplier).
+     * Enforced limit per subject (plan null → fair use cap); the IP subject gets the same cap.
      *
      * @param  list<string>  $subjects
      * @param  array<string, mixed>  $planLimits
@@ -145,17 +145,8 @@ class QuotaService
     {
         $base = $planLimits[$metric.'_per_day'] ?? null;
         $base ??= config("toolkits.fair_use.{$metric}_per_day");
-        $multiplier = max(1, (int) ($planLimits['ip_limit_multiplier'] ?? 1));
 
-        $limits = [];
-
-        foreach ($subjects as $subject) {
-            $limits[$subject] = $base === null
-                ? null
-                : (str_starts_with($subject, 'ip:') ? (int) $base * $multiplier : (int) $base);
-        }
-
-        return $limits;
+        return array_fill_keys($subjects, $base === null ? null : (int) $base);
     }
 
     /**

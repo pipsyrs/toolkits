@@ -97,7 +97,7 @@ class ToolStatusTest extends TestCase
 
         $this->actingAs($this->superadmin())->get('/admin/tools/qr-code')
             ->assertOk()
-            ->assertSee('Fitur per paket')
+            ->assertSee('Fitur berbayar')
             ->assertSee('Unduh format SVG');
     }
 

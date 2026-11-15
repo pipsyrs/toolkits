@@ -18,6 +18,8 @@ enum PermissionName: string
     case PaymentsView = 'payments.view';
     case PaymentMethodsManage = 'payment_methods.manage';
     case ToolsManage = 'tools.manage';
+    case ReportsView = 'reports.view';
+    case ReportsManage = 'reports.manage';
 
     public function label(): string
     {
@@ -34,7 +36,9 @@ enum PermissionName: string
             self::SettingsManage => 'Kelola pengaturan aplikasi',
             self::PaymentsView => 'Lihat transaksi pembayaran',
             self::PaymentMethodsManage => 'Kelola metode pembayaran',
-            self::ToolsManage => 'Kelola status alat (aktif / nonaktif)',
+            self::ToolsManage => 'Kelola alat (status & kategori)',
+            self::ReportsView => 'Lihat laporan pengguna (CS)',
+            self::ReportsManage => 'Tanggapi laporan pengguna (CS)',
         };
     }
 
@@ -50,6 +54,7 @@ enum PermissionName: string
             self::SettingsManage => 'settings',
             self::PaymentsView, self::PaymentMethodsManage => 'payments',
             self::ToolsManage => 'tools',
+            self::ReportsView, self::ReportsManage => 'support',
         };
     }
 

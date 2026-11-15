@@ -10,7 +10,7 @@
         <header class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <div>
                 <h1 class="font-display text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl dark:text-white">Pilih paket ToolKits</h1>
-                <p class="mt-3 max-w-[52ch] text-slate-600 dark:text-slate-300">Mulai gratis tanpa daftar. Pro dibayar per periode lewat Xendit, tanpa tagihan otomatis.</p>
+                <p class="mt-3 max-w-[52ch] text-slate-600 dark:text-slate-300">Mulai gratis tanpa daftar. Pro dibayar per periode, tanpa tagihan otomatis.</p>
             </div>
 
             @if($hasPaid)

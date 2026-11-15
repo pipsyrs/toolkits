@@ -1,9 +1,13 @@
 @php
     use App\Enums\QrFrame;
     use App\Enums\QrTemplate;
+    use App\Services\Tier\Entitlements;
+    use App\Services\Tier\PlanLimits;
 
     $locked = $this->locked;
-    $proBadge = '<span class="badge bg-tool/30 text-fg">Pro</span>';
+    // Nama paket pemilik tiap fitur berbayar untuk badge; null = tak ada paket yang membukanya.
+    $planNames = collect(['svg', 'premium_template', 'premium_frame', 'custom_color'])
+        ->mapWithKeys(fn ($f) => [$f => app(PlanLimits::class)->planForLimit(Entitlements::toolKey('qr-code', $f))])->all();
     // Radio tile: checked = ink border; keyboard focus ring follows the hidden input.
     $tile = 'relative flex cursor-pointer rounded-md border border-line bg-surface text-sm transition-colors hover:border-line-strong has-[:checked]:border-line-strong has-[:checked]:bg-sunken has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-fg';
     $tileLocked = 'relative flex cursor-not-allowed rounded-md border border-line bg-surface text-sm opacity-55';
@@ -13,7 +17,8 @@
 
 <div class="mx-auto max-w-5xl">
     <header class="mb-6">
-        <h1 class="font-display text-2xl font-bold text-fg">Buat QR Code</h1>
+        <p class="eyebrow">QR Code</p>
+        <h1 class="page-title">Buat QR Code</h1>
         <p class="mt-1 text-sm text-muted">Ubah teks atau tautan menjadi QR code, lengkap dengan desain dan bingkai.</p>
     </header>
 
@@ -25,7 +30,7 @@
 
     <div class="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         {{-- Form --}}
-        <div class="card p-6">
+        <div class="glass-strong p-6">
             <form wire:submit="generate" class="space-y-6">
                 <div>
                     <label for="text" class="label">Teks atau tautan</label>
@@ -44,7 +49,7 @@
                                 <input type="radio" wire:model.live="template" value="{{ $option->value }}" @disabled($isLocked) class="sr-only">
                                 <x-qr-swatch :template="$option" class="h-12 w-12" />
                                 <span class="font-medium">{{ $option->label() }}</span>
-                                @if($option->isPro()) <span class="absolute right-1 top-1">{!! $proBadge !!}</span> @endif
+                                @if($option->isPro()) <span class="absolute right-1 top-1"><x-plan-badge :plan="$planNames['premium_template']" /></span> @endif
                             </label>
                         @endforeach
                     </div>
@@ -55,7 +60,7 @@
                 <fieldset>
                     {{-- Tombol di dalam legend: posisi absolute di fieldset jatuh ke area isi dan menutupi kotak warna. --}}
                     <legend class="label flex min-h-8 w-full items-center justify-between gap-2">
-                        <span class="flex items-center gap-2">Warna @if($locked['custom_color']) {!! $proBadge !!} @endif</span>
+                        <span class="flex items-center gap-2">Warna @if($locked['custom_color']) <x-plan-badge :plan="$planNames['custom_color']" /> @endif</span>
                         @unless($locked['custom_color'])
                             <button type="button" wire:click="resetColors" class="btn-ghost btn-sm">Kembalikan warna template</button>
                         @endunless
@@ -86,7 +91,7 @@
                             <label class="{{ $isLocked ? $tileLocked : $tile }} items-center justify-center gap-2 px-3 py-2.5">
                                 <input type="radio" wire:model.live="frame" value="{{ $option->value }}" @disabled($isLocked) class="sr-only">
                                 <span class="font-medium">{{ $option->label() }}</span>
-                                @if($option->isPro()) {!! $proBadge !!} @endif
+                                @if($option->isPro()) <x-plan-badge :plan="$planNames['premium_frame']" /> @endif
                             </label>
                         @endforeach
                     </div>
@@ -119,7 +124,7 @@
                             </label>
                             <label class="{{ $locked['svg'] ? $tileLocked : $tile }} flex-1 items-center justify-center gap-2 px-3 py-2">
                                 <input type="radio" wire:model.live="format" value="svg" @disabled($locked['svg']) class="sr-only">
-                                SVG @if($locked['svg']) {!! $proBadge !!} @endif
+                                SVG @if($locked['svg']) <x-plan-badge :plan="$planNames['svg']" /> @endif
                             </label>
                         </div>
                         @error('format') <p class="field-error">{{ $message }}</p> @enderror
@@ -149,7 +154,7 @@
         </div>
 
         {{-- Hasil --}}
-        <div class="card flex flex-col items-center justify-center gap-4 p-6 lg:sticky lg:top-6 lg:self-start">
+        <div class="glass-strong flex flex-col items-center justify-center gap-4 p-6 lg:sticky lg:top-6 lg:self-start">
             @if($dataUri)
                 <img src="{{ $dataUri }}" alt="QR code hasil" class="h-auto max-h-[28rem] w-auto max-w-full" width="300">
                 <a href="{{ $dataUri }}" download="qrcode.{{ $format === 'svg' ? 'svg' : 'png' }}" class="btn-secondary">

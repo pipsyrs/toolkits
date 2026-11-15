@@ -76,21 +76,16 @@
             <div>{{ $links->links() }}</div>
         @endif
 
-        {{-- Modal alasan nonaktif --}}
-        <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="disable-title">
-            <div class="absolute inset-0 bg-ink/50 backdrop-blur-sm" @click="open = false"></div>
-            <div class="relative w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl">
-                <h2 id="disable-title" class="text-lg font-semibold text-fg">Nonaktifkan link</h2>
-                <p class="mt-1 text-sm text-muted">Nonaktifkan <span class="font-medium text-fg">/s/<span x-text="linkCode"></span></span>. Pengunjung akan melihat halaman tidak tersedia.</p>
-                <div class="mt-4">
-                    <label for="disable-reason" class="label text-fg">Alasan</label>
-                    <textarea id="disable-reason" x-model="reason" rows="3" class="input" placeholder="Contoh: tautan spam / phishing"></textarea>
-                </div>
-                <div class="mt-5 flex justify-end gap-2">
-                    <button type="button" class="btn-secondary" @click="open = false">Batal</button>
-                    <button type="button" class="btn-danger"
-                        @click="$wire.disable(linkId, reason); open = false">Nonaktifkan</button>
-                </div>
+        {{-- Modal alasan nonaktif (state Alpine: open, linkId, linkCode, reason) --}}
+        <x-dashboard.modal title="Nonaktifkan link">
+            <p class="text-sm text-muted">Nonaktifkan <span class="font-medium text-fg">/s/<span x-text="linkCode"></span></span>. Pengunjung akan melihat halaman tidak tersedia.</p>
+            <div>
+                <label for="disable-reason" class="label text-fg">Alasan</label>
+                <textarea id="disable-reason" x-model="reason" rows="3" class="input" placeholder="Contoh: tautan spam / phishing"></textarea>
             </div>
-        </div>
+            <x-slot:footer>
+                <button type="button" class="btn-secondary" @click="open = false">Batal</button>
+                <button type="button" class="btn-danger" @click="$wire.disable(linkId, reason); open = false">Nonaktifkan</button>
+            </x-slot:footer>
+        </x-dashboard.modal>
     </div>

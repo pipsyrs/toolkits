@@ -82,18 +82,28 @@ class ShortLinkTest extends TestCase
     public function test_guest_cannot_use_alias_and_reserved_alias_rejected(): void
     {
         $this->assertRejected(null, ['target_url' => 'https://example.com', 'alias' => 'promo'], 'alias');
-        $this->assertRejected(User::factory()->create(), ['target_url' => 'https://example.com', 'alias' => 'admin'], 'alias');
+        // Reserved alias ditolak bahkan untuk paket yang boleh pakai alias kustom.
+        $this->assertRejected(User::factory()->pro()->create(), ['target_url' => 'https://example.com', 'alias' => 'admin'], 'alias');
     }
 
-    public function test_free_sixth_alias_rejected(): void
+    public function test_free_cannot_use_custom_alias(): void
     {
-        $user = User::factory()->create();
+        $this->assertRejected(User::factory()->create(), ['target_url' => 'https://example.com', 'alias' => 'promo'], 'alias');
+    }
 
-        for ($i = 1; $i <= 5; $i++) {
-            $this->create($user, ['target_url' => 'https://example.com/'.$i, 'alias' => 'promo-'.$i]);
-        }
+    public function test_free_sees_locked_alias_and_expiry_with_plan_badge(): void
+    {
+        Livewire::actingAs(User::factory()->create())->test(Shorten::class)
+            ->assertSeeHtml('id="alias"')
+            ->assertSee('Tersedia di paket berbayar')
+            ->assertSeeHtml('Butuh paket Pro');
+    }
 
-        $this->assertRejected($user, ['target_url' => 'https://example.com/6', 'alias' => 'promo-6'], 'alias');
+    public function test_paid_user_gets_enabled_alias_and_expiry(): void
+    {
+        Livewire::actingAs(User::factory()->pro()->create())->test(Shorten::class)
+            ->assertSeeHtml('id="alias"')
+            ->assertDontSee('Tersedia di paket berbayar');
     }
 
     public function test_shorten_component_maps_errors_and_shows_result(): void

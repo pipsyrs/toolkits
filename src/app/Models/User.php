@@ -68,6 +68,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Payment::class);
     }
 
+    public function supportReports(): HasMany
+    {
+        return $this->hasMany(SupportReport::class);
+    }
+
     // False for Google-only accounts.
     public function hasPassword(): bool
     {

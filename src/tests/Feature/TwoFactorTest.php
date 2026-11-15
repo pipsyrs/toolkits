@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Actions\Admin\SaveRole;
-use App\Livewire\Admin\Roles\Form as RoleForm;
 use App\Livewire\Admin\Roles\Index as RolesIndex;
 use App\Livewire\Admin\Users\Index as UsersIndex;
 use App\Models\AdminAuditLog;
@@ -327,10 +326,10 @@ class TwoFactorTest extends TestCase
         $this->actingAs($admin);
         session($this->confirmed());
 
-        Livewire::test(RoleForm::class)->set('selected', 'not-an-array')->assertStatus(422);
-        Livewire::test(RoleForm::class)->set('name', ['x'])->assertStatus(422);
-        Livewire::test(RoleForm::class)->set('selected.0', ['nested'])->assertStatus(422);
-        Livewire::test(RoleForm::class)->set('selected', ['links.view'])->assertOk()->assertSet('selected', ['links.view']);
+        Livewire::test(RolesIndex::class)->set('selected', 'not-an-array')->assertStatus(422);
+        Livewire::test(RolesIndex::class)->set('name', ['x'])->assertStatus(422);
+        Livewire::test(RolesIndex::class)->set('selected.0', ['nested'])->assertStatus(422);
+        Livewire::test(RolesIndex::class)->set('selected', ['links.view'])->assertOk()->assertSet('selected', ['links.view']);
 
         Livewire::test(UsersIndex::class)->set('roleSelection', 'x')->assertStatus(422);
         Livewire::test(UsersIndex::class)->call('editRoles', ['x'])->assertHasErrors('userId');

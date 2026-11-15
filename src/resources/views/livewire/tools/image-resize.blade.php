@@ -10,20 +10,21 @@
 
 <div class="mx-auto max-w-3xl">
     <header class="mb-6">
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Ubah Ukuran Gambar</h1>
-        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Perbesar atau perkecil gambar berdasarkan persen atau dimensi.</p>
+        <p class="eyebrow">Gambar</p>
+        <h1 class="page-title">Ubah Ukuran Gambar</h1>
+        <p class="mt-1 text-sm text-muted">Perbesar atau perkecil gambar berdasarkan persen atau dimensi.</p>
     </header>
 
-    <div class="card space-y-5 p-6">
+    <div class="glass-strong space-y-5 p-6">
         <x-file-dropzone :accept="$accept" :max-files="$maxFiles" :max-mb="$maxMb" multiple />
 
         <fieldset>
             <legend class="label">Metode</legend>
             <div class="flex gap-2">
-                <label class="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 dark:border-slate-700 dark:has-[:checked]:bg-brand-600/10">
+                <label class="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-line-strong has-[:checked]:bg-sunken has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-fg">
                     <input type="radio" wire:model.live="mode" value="percent" class="sr-only"> Persen
                 </label>
-                <label class="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 dark:border-slate-700 dark:has-[:checked]:bg-brand-600/10">
+                <label class="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-line-strong has-[:checked]:bg-sunken has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-fg">
                     <input type="radio" wire:model.live="mode" value="dimension" class="sr-only"> Dimensi (px)
                 </label>
             </div>
@@ -31,8 +32,8 @@
 
         @if(($mode ?? 'percent') === 'percent')
             <div>
-                <label for="percent" class="label">Skala <span class="font-normal text-slate-500 dark:text-slate-400">(<span x-text="$wire.percent"></span>%)</span></label>
-                <input id="percent" type="range" min="1" max="100" step="1" wire:model="percent" class="w-full accent-brand-600">
+                <label for="percent" class="label">Skala <span class="font-normal text-muted">(<span x-text="$wire.percent"></span>%)</span></label>
+                <input id="percent" type="range" min="1" max="100" step="1" wire:model="percent" class="w-full accent-tool-deep">
                 @error('percent') <p class="field-error">{{ $message }}</p> @enderror
             </div>
         @else
@@ -48,8 +49,8 @@
                     @error('height') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
             </div>
-            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                <input type="checkbox" wire:model="keepAspect" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800">
+            <label class="flex items-center gap-2 text-sm text-muted">
+                <input type="checkbox" wire:model="keepAspect" class="rounded border-line text-ok focus:ring-fg">
                 Pertahankan rasio aspek
             </label>
         @endif

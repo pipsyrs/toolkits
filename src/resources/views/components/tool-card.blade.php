@@ -10,9 +10,9 @@
     };
     $cat = $tool['category'] ?? 'link';
     $catStyle = match ($cat) {
-        'image' => ['label' => 'Gambar', 'badge' => 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300', 'tile' => 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300'],
-        'pdf' => ['label' => 'PDF', 'badge' => 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300', 'tile' => 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300'],
-        default => ['label' => 'Link', 'badge' => 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300', 'tile' => 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300'],
+        'image' => ['badge' => 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300', 'tile' => 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300'],
+        'pdf' => ['badge' => 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300', 'tile' => 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300'],
+        default => ['badge' => 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300', 'tile' => 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300'],
     };
     // Ikon per slug (heroicons outline), fallback per kategori
     $icon = match ($tool['slug'] ?? '') {
@@ -43,7 +43,7 @@
             <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="{{ $icon }}"/></svg>
         </span>
         <div class="flex flex-wrap justify-end gap-1.5">
-            <span class="badge {{ $catStyle['badge'] }}">{{ $catStyle['label'] }}</span>
+            <span class="badge {{ $catStyle['badge'] }}">{{ $tool['category_name'] ?? $cat }}</span>
             @unless($isLive)
                 <span class="badge {{ $statusBadge }}">{{ $status->label() }}</span>
             @endunless

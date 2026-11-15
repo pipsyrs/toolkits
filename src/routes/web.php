@@ -44,6 +44,7 @@ Route::middleware(['auth', 'verified', 'not.blocked'])->prefix('dashboard')->gro
     Route::livewire('/', Client\Overview::class)->name('dashboard');
     Route::livewire('/links', Client\Links\Index::class)->name('dashboard.links.index');
     Route::livewire('/files', Client\Files\Index::class)->name('dashboard.files.index');
+    Route::livewire('/support', Client\Support\Index::class)->name('dashboard.support.index');
     Route::livewire('/billing', Client\Billing::class)->name('dashboard.billing');
     // Legacy invoice return page (display only); activation happens via webhook.
     Route::livewire('/billing/return/{payment}', Client\Billing::class)->whereUuid('payment')->name('dashboard.billing.return');

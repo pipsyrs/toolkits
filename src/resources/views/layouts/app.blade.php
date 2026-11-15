@@ -23,6 +23,8 @@
     @livewireStyles
 </head>
 <body class="flex min-h-full flex-col">
+    {{-- Latar pegboard + glow (gradient/filter saja, didukung Firefox ESR) agar panel kaca tampak melayang. --}}
+    <div class="dash-backdrop" aria-hidden="true"></div>
     <a href="#main" class="sr-only z-50 rounded-md bg-tool px-3 py-2 text-sm font-semibold text-ink focus:not-sr-only focus:fixed focus:left-4 focus:top-3">Lewati ke konten</a>
 
     <header class="relative border-b border-line bg-canvas">

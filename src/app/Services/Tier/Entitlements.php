@@ -33,11 +33,9 @@ class Entitlements
         'links_per_day' => ['group' => 'Link', 'label' => 'Link baru per hari', 'type' => self::INT, 'nullable' => true, 'min' => 0, 'max' => 1000000, 'default' => 0],
         'links_active_max' => ['group' => 'Link', 'label' => 'Link aktif maks', 'type' => self::INT, 'nullable' => true, 'min' => 0, 'max' => 1000000, 'default' => 0],
         'link_lifetime_days' => ['group' => 'Link', 'label' => 'Umur link (hari)', 'type' => self::INT, 'nullable' => true, 'min' => 1, 'max' => 3650, 'default' => 30, 'help' => 'Kosong = permanen'],
-        'custom_alias_max' => ['group' => 'Link', 'label' => 'Alias kustom maks', 'type' => self::INT, 'nullable' => true, 'min' => 0, 'max' => 1000000, 'default' => 0, 'help' => '0 = tidak boleh'],
         'link_custom_expiry' => ['group' => 'Link', 'label' => 'Atur kedaluwarsa link', 'type' => self::BOOL, 'default' => false],
         'interstitial' => ['group' => 'Link', 'label' => 'Halaman jeda sebelum redirect', 'type' => self::BOOL, 'default' => true],
         'ads' => ['group' => 'Umum', 'label' => 'Tampilkan iklan', 'type' => self::BOOL, 'default' => true],
-        'ip_limit_multiplier' => ['group' => 'Umum', 'label' => 'Pengali kuota per IP (belum login)', 'type' => self::INT, 'min' => 1, 'max' => 100, 'default' => 1],
     ];
 
     public static function toolKey(string $tool, string $feature): string
@@ -86,6 +84,7 @@ class Entitlements
                     'label' => $label,
                     'type' => self::BOOL,
                     'default' => false,
+                    'feature' => true,
                 ];
             }
         }

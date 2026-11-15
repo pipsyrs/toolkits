@@ -1,7 +1,6 @@
 @php
     use App\Enums\ToolStatus;
 
-    $categoryLabels = ['link' => 'Link', 'image' => 'Gambar', 'pdf' => 'PDF'];
     $liveCount = collect($tools)->where('status', ToolStatus::Live->value)->count();
 @endphp
 
@@ -38,7 +37,7 @@
                         </div>
                         <div class="mt-auto flex flex-wrap items-center gap-2">
                             <x-dashboard.tool-status :status="$status" />
-                            <span class="badge badge-muted">{{ $categoryLabels[$tool['category'] ?? ''] ?? ucfirst($tool['category'] ?? '-') }}</span>
+                            <span class="badge badge-muted">{{ $tool['category_name'] }}</span>
                             @if($features)
                                 <span class="badge badge-muted">{{ count($features) }} fitur per paket</span>
                             @endif

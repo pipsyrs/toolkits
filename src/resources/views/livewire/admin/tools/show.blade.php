@@ -1,7 +1,6 @@
 @php
     use App\Enums\ToolStatus;
 
-    $categoryLabels = ['link' => 'Link', 'image' => 'Gambar', 'pdf' => 'PDF'];
     $isLive = $status === ToolStatus::Live;
     $features = $tool['features'];
 @endphp
@@ -19,7 +18,7 @@
                 <h2 class="page-title truncate">{{ $tool['name'] }}</h2>
                 <div class="mt-1.5 flex flex-wrap items-center gap-2">
                     <x-dashboard.tool-status :status="$status" />
-                    <span class="badge badge-muted">{{ $categoryLabels[$tool['category'] ?? ''] ?? ucfirst($tool['category'] ?? '-') }}</span>
+                    <span class="badge badge-muted">{{ $tool['category_name'] }}</span>
                     <span class="font-mono text-xs text-muted">/tools/{{ $tool['slug'] }}</span>
                 </div>
             </div>
@@ -70,13 +69,60 @@
             </div>
         </section>
 
-        {{-- Fitur berbayar: diatur per paket di matriks --}}
+        {{-- Kategori: master data di Kategori alat --}}
+        <section class="glass p-5 sm:p-6" aria-labelledby="category-heading">
+            <h3 id="category-heading" class="font-display text-lg font-bold tracking-tight text-fg">Kategori</h3>
+            <p class="mt-1 max-w-prose text-sm text-muted">Menentukan filter dan label alat di halaman Semua alat.</p>
+            <label for="category" class="label mt-4">Kategori alat</label>
+            <select id="category" wire:model.live="category" @class(['input sm:max-w-xs', 'border-danger' => $errors->has('category')])>
+                @unless(array_key_exists($category, $categories))
+                    <option value="{{ $category }}" disabled>{{ $tool['category_name'] }} (belum terdaftar)</option>
+                @endunless
+                @foreach($categories as $slugOption => $name)
+                    <option value="{{ $slugOption }}">{{ $name }}</option>
+                @endforeach
+            </select>
+            @error('category') <p class="field-error">{{ $message }}</p> @enderror
+            <a href="{{ route('admin.tool-categories.index') }}" class="btn-secondary btn-sm mt-4">Kelola kategori</a>
+        </section>
+
+        {{-- Fitur berbayar: tiap fitur dimiliki satu paket saja --}}
         @if($features)
             <section class="glass p-5 sm:p-6" aria-labelledby="features-heading">
-                <h3 id="features-heading" class="font-display text-lg font-bold tracking-tight text-fg">Fitur per paket</h3>
-                <p class="mt-1 max-w-prose text-sm text-muted">{{ implode(', ', $features) }}. Siapa yang boleh memakai tiap fitur diatur per paket.</p>
+                <h3 id="features-heading" class="font-display text-lg font-bold tracking-tight text-fg">Fitur berbayar</h3>
+                <p class="mt-1 max-w-prose text-sm text-muted">Tiap fitur hanya tersedia untuk paket yang dipilih. "Terkunci" berarti tidak ada paket yang memperolehnya.</p>
                 @can('plans.manage')
-                    <a href="{{ route('admin.plans.edit') }}" class="btn-secondary btn-sm mt-4">Atur di matriks paket</a>
+                    <dl class="mt-4 space-y-4">
+                        @foreach($features as $feature => $label)
+                            @php $current = $featurePlan[$feature] ?? ''; @endphp
+                            <div wire:key="feat-{{ $feature }}" class="flex flex-col gap-2 border-b border-line/70 pb-4 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                                <dt class="text-sm font-medium text-fg">{{ $label }}</dt>
+                                <dd>
+                                    <div role="radiogroup" aria-label="Paket untuk {{ $label }}" class="inline-flex flex-wrap gap-1 rounded-xl border border-line bg-sunken p-1">
+                                        <button type="button" role="radio" aria-checked="{{ $current === '' ? 'true' : 'false' }}"
+                                            wire:key="seg-{{ $feature }}-locked" wire:click="$set('featurePlan.{{ $feature }}', '')"
+                                            @class([
+                                                'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/40',
+                                                'bg-surface text-fg shadow-sm ring-1 ring-line' => $current === '',
+                                                'text-muted hover:bg-fg/5 hover:text-fg' => $current !== '',
+                                            ])>Terkunci</button>
+                                        @foreach($plans as $plan)
+                                            <button type="button" role="radio" aria-checked="{{ $current === $plan->slug ? 'true' : 'false' }}"
+                                                wire:key="seg-{{ $feature }}-{{ $plan->slug }}" wire:click="$set('featurePlan.{{ $feature }}', '{{ $plan->slug }}')"
+                                                @class([
+                                                    'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/40',
+                                                    'bg-ok text-white shadow-sm' => $current === $plan->slug,
+                                                    'text-muted hover:bg-fg/5 hover:text-fg' => $current !== $plan->slug,
+                                                ])>{{ $plan->name }}</button>
+                                        @endforeach
+                                    </div>
+                                    @error('featurePlan.'.$feature) <p class="field-error mt-1">{{ $message }}</p> @enderror
+                                </dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                @else
+                    <p class="mt-2 text-sm text-muted">{{ implode(', ', $features) }}.</p>
                 @endcan
             </section>
         @endif

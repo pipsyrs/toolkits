@@ -91,7 +91,7 @@ class AppSettingsQaTest extends TestCase
             ->withSession(['auth.password_confirmed_at' => time()])
             ->get('/admin/settings')
             ->assertOk()
-            ->assertSee(['Umum', 'Email / SMTP', 'Login Google', 'Xendit'])
+            ->assertSee(['Umum', 'Email / SMTP', 'Login Google', 'Payment gateway'])
             ->assertSeeInOrder(['Nama situs', 'Database', 'Email dukungan'])
             ->assertSeeInOrder(['SMTP host', '.env', 'SMTP port'])
             ->assertSeeInOrder(['Client secret', 'Kosong', 'Redirect URI'])

@@ -11,7 +11,7 @@ class SettingRegistry
         'general' => 'Umum',
         'mail' => 'Email (SMTP)',
         'google' => 'Login Google',
-        'xendit' => 'Xendit',
+        'xendit' => 'Payment gateway',
     ];
 
     /**

@@ -97,6 +97,18 @@ class ImageProcessor
         }
     }
 
+    // Re-encoded WebP that fits $maxSide, keeping transparency; re-encoding drops anything hidden in the upload.
+    public function logo(string $src, string $out, int $maxSide): void
+    {
+        $image = $this->load($src);
+        [$w, $h] = [imagesx($image), imagesy($image)];
+        $scale = min(1, $maxSide / max($w, $h));
+        $logo = $this->transparentCanvas(max(1, (int) round($w * $scale)), max(1, (int) round($h * $scale)));
+        imagecopyresampled($logo, $image, 0, 0, 0, 0, imagesx($logo), imagesy($logo), $w, $h);
+
+        $this->save($logo, $out, 'webp', self::DEFAULT_QUALITY);
+    }
+
     public function formatOf(string $path): string
     {
         return match (@getimagesize($path)[2] ?? null) {

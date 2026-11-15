@@ -30,6 +30,9 @@ return [
             'description' => 'Ubah URL panjang menjadi link pendek yang mudah dibagikan.',
             'accept' => null,
             'status' => 'live',
+            'features' => [
+                'custom_alias' => 'Alias kustom',
+            ],
         ],
         [
             'slug' => 'qr-code',

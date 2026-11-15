@@ -37,7 +37,9 @@ class Index extends Component
     #[Url]
     public string $status = 'all';
 
-    // Role modal: target user + selected role ids.
+    // Role modal: open state, target user + selected role ids.
+    public bool $rolesOpen = false;
+
     #[Locked]
     public ?string $editingUserId = null;
 
@@ -76,6 +78,7 @@ class Index extends Component
         $this->resetErrorBag();
         $this->editingUserId = $target->getKey();
         $this->roleSelection = $target->roles()->pluck('id')->map(fn ($id) => (string) $id)->all();
+        $this->rolesOpen = true;
     }
 
     public function saveRoles(AssignUserRoles $action): void
@@ -93,6 +96,7 @@ class Index extends Component
 
     public function cancelRoles(): void
     {
+        $this->rolesOpen = false;
         $this->editingUserId = null;
         $this->roleSelection = [];
     }

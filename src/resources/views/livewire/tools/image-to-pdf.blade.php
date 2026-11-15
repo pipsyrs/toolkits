@@ -10,11 +10,12 @@
 
 <div class="mx-auto max-w-3xl">
     <header class="mb-6">
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Gambar ke PDF</h1>
-        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Gabung beberapa gambar menjadi satu PDF. Atur urutan dengan tombol naik/turun.</p>
+        <p class="eyebrow">Gambar ke PDF</p>
+        <h1 class="page-title">Gambar ke PDF</h1>
+        <p class="mt-1 text-sm text-muted">Gabung beberapa gambar menjadi satu PDF. Atur urutan dengan tombol naik/turun.</p>
     </header>
 
-    <div class="card space-y-5 p-6">
+    <div class="glass-strong space-y-5 p-6">
         <x-file-dropzone :accept="$accept" :max-files="$maxFiles" :max-mb="$maxMb" multiple sortable />
 
         <div class="grid gap-4 sm:grid-cols-3">

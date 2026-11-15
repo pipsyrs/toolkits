@@ -26,11 +26,6 @@ class PlanHighlights
             $this->daily($limits['file_ops_per_day'], 'proses file', $count),
             $this->daily($limits['links_per_day'], 'link pendek', $count),
             'Hasil disimpan '.$this->duration(Entitlements::retentionMinutes($limits)),
-            match (true) {
-                $limits['custom_alias_max'] === null => 'Alias link kustom tanpa batas',
-                (int) $limits['custom_alias_max'] > 0 => $count($limits['custom_alias_max']).' alias link kustom',
-                default => null,
-            },
             $limits['link_custom_expiry'] ? 'Atur kedaluwarsa link' : null,
             $limits['queue'] === 'pro' ? 'Antrean proses prioritas' : null,
             $limits['ads'] ? null : 'Bebas iklan',

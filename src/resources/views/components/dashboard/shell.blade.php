@@ -1,7 +1,7 @@
 @props([
     'title' => null,
     'documentTitle',
-    // list of ['label', 'route', 'pattern', 'icon', 'permission' => null]
+    // list of ['heading' => ?string, 'items' => list of ['label', 'route', 'pattern', 'icon', 'permission' => null]]
     'nav' => [],
     'navLabel',
     'area' => null,
@@ -66,15 +66,26 @@
         </div>
 
         <nav class="flex flex-1 flex-col gap-1 overflow-y-auto overscroll-contain px-3 py-2" aria-label="{{ $navLabel }}" @click="$event.target.closest('a') && closeSidebar(false)">
-            @foreach($nav as $item)
-                @if(empty($item['permission']) || auth()->user()?->can($item['permission']))
-                    @php($active = request()->routeIs($item['pattern']))
-                    <a href="{{ route($item['route']) }}" title="{{ $item['label'] }}" @if($active) aria-current="page" @endif
-                        class="nav-item lg:group-data-[sidebar=collapsed]/root:justify-center lg:group-data-[sidebar=collapsed]/root:px-0">
-                        <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="{{ $item['icon'] }}"/></svg>
-                        <span class="truncate lg:group-data-[sidebar=collapsed]/root:sr-only">{{ $item['label'] }}</span>
-                    </a>
-                @endif
+            @php($shownGroups = 0)
+            @foreach($nav as $group)
+                @php($items = array_filter($group['items'], fn ($item) => empty($item['permission']) || auth()->user()?->can($item['permission'])))
+                {{-- Groups without any permitted item are hidden entirely --}}
+                @continue($items === [])
+                @php($groupId = 'nav-group-'.$loop->index)
+                <div @class(['flex flex-col gap-1', 'mt-4' => $shownGroups++ > 0]) role="group" @if(! empty($group['heading'])) aria-labelledby="{{ $groupId }}" @endif>
+                    @if(! empty($group['heading']))
+                        <p id="{{ $groupId }}" class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted lg:group-data-[sidebar=collapsed]/root:sr-only">{{ $group['heading'] }}</p>
+                        <hr class="mx-2 mb-1 hidden border-glass-line lg:group-data-[sidebar=collapsed]/root:block" aria-hidden="true">
+                    @endif
+                    @foreach($items as $item)
+                        @php($active = request()->routeIs($item['pattern']))
+                        <a href="{{ route($item['route']) }}" title="{{ $item['label'] }}" @if($active) aria-current="page" @endif
+                            class="nav-item lg:group-data-[sidebar=collapsed]/root:justify-center lg:group-data-[sidebar=collapsed]/root:px-0">
+                            <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="{{ $item['icon'] }}"/></svg>
+                            <span class="truncate lg:group-data-[sidebar=collapsed]/root:sr-only">{{ $item['label'] }}</span>
+                        </a>
+                    @endforeach
+                </div>
             @endforeach
 
             {{ $sidebarExtra ?? '' }}

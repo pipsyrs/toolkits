@@ -3,10 +3,10 @@
 namespace App\Actions\Billing;
 
 use App\Enums\BillingPeriod;
-use App\Enums\PaymentChannel;
 use App\Enums\PaymentStatus;
 use App\Exceptions\BillingException;
 use App\Models\Payment;
+use App\Models\PaymentChannel;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\Billing\PaymentMethodCatalog;
@@ -25,7 +25,7 @@ class StartCheckout
     // payments.pay_code column size.
     private const PAY_CODE_MAX = 1024;
 
-    // Indonesian mobile number in E.164 (+628…), as OVO expects.
+    // Indonesian mobile number in E.164 (+628…), as push-notification e-wallets (OVO) expect.
     private const MOBILE_PATTERN = '/^\+628[1-9][0-9]{6,11}$/';
 
     // Descriptors whose value is a link the customer opens.
@@ -33,6 +33,9 @@ class StartCheckout
 
     // Request states in which the customer can still pay.
     private const PAYABLE_STATUSES = ['ACCEPTING_PAYMENTS', 'REQUIRES_ACTION'];
+
+    // Session state in which the hosted page accepts a card.
+    private const SESSION_PAYABLE_STATUS = 'ACTIVE';
 
     public function __construct(
         private readonly XenditClient $xendit,
@@ -42,11 +45,16 @@ class StartCheckout
         private readonly HandleXenditPaymentCallback $status,
     ) {}
 
-    // Cancels an unpaid request at Xendit. When Xendit refuses (already paid or closed), the real state is synced instead.
+    // Cancels an unpaid request or card session at Xendit. When Xendit refuses (already paid or closed), the real state is synced instead.
     public function cancel(Payment $payment): PaymentStatus
     {
         try {
-            $this->xendit->cancelPaymentRequest((string) $payment->xendit_payment_request_id);
+            if ($payment->xendit_payment_session_id !== null) {
+                $this->xendit->cancelSession($payment->xendit_payment_session_id);
+            } else {
+                $this->xendit->cancelPaymentRequest((string) $payment->xendit_payment_request_id);
+            }
+
             $this->settle->close($payment, PaymentStatus::Canceled);
         } catch (BillingException) {
             try {
@@ -60,7 +68,7 @@ class StartCheckout
     }
 
     /**
-     * Returns the pending payment holding what the modal shows: QR string, VA number, e-wallet link, or nothing (OVO push).
+     * Returns the pending payment holding what the modal shows: QR string, VA number, e-wallet or card page link, or nothing (OVO push).
      *
      * @throws BillingException
      */
@@ -78,11 +86,11 @@ class StartCheckout
             throw BillingException::unavailable();
         }
 
-        if (! $this->methods->isActive($channel)) {
+        if (! $this->methods->isActive($channel->code)) {
             throw new BillingException('Metode pembayaran tidak tersedia.');
         }
 
-        $mobileNumber = $channel->needsMobileNumber() ? $this->mobileNumber($mobileNumber) : null;
+        $mobileNumber = $channel->needs_mobile_number ? $this->mobileNumber($mobileNumber) : null;
 
         $model = Plan::query()->where('slug', $plan)->first();
         $amount = (int) ($period === BillingPeriod::Yearly ? $model?->price_yearly : $model?->price_monthly);
@@ -104,7 +112,7 @@ class StartCheckout
 
         try {
             // A push notification goes to the number just entered, so OVO always starts a new request.
-            $reusable = $channel->needsMobileNumber() ? null : $this->reusable($user, $plan, $period, $channel, $amount);
+            $reusable = $channel->needs_mobile_number ? null : $this->reusable($user, $plan, $period, $channel, $amount);
 
             return $reusable ?? $this->create($user, $plan, $period, $channel, $amount, $mobileNumber);
         } finally {
@@ -119,10 +127,10 @@ class StartCheckout
             ->where('status', PaymentStatus::Pending->value)
             ->where('plan', $plan)
             ->where('period', $period->value)
-            ->where('payment_channel', $channel->value)
+            ->where('payment_channel', $channel->code)
             ->where('amount', $amount)
             ->where('expires_at', '>', now()->addMinutes(self::REUSE_MARGIN_MINUTES))
-            ->whereNotNull('xendit_payment_request_id')
+            ->inApp()
             ->latest('created_at')
             ->first();
     }
@@ -140,28 +148,15 @@ class StartCheckout
             'kind' => $this->calculator->kind($user, $plan),
             'amount' => $amount,
             'currency' => 'IDR',
-            'payment_method' => $channel->method(),
-            'payment_channel' => $channel->value,
+            'payment_method' => $channel->kind->method(),
+            'payment_channel' => $channel->code,
             'expires_at' => $expiresAt,
         ]);
 
         try {
-            $request = $this->xendit->createPaymentRequest($payment, $channel, $expiresAt, $mobileNumber);
-            $code = $this->payCode($request, $channel);
-
-            if (($code === null && ! $channel->needsMobileNumber())
-                || ($request['reference_id'] ?? null) !== $payment->order_id
-                || ! in_array($request['status'] ?? null, self::PAYABLE_STATUSES, true)) {
-                report(new BillingException('Xendit create payment request: unexpected response'));
-
-                throw BillingException::unavailable();
-            }
-
-            $payment->update([
-                'xendit_payment_request_id' => (string) $request['payment_request_id'],
-                'pay_code' => $code,
-                'expires_at' => $this->expiry($request['channel_properties']['expires_at'] ?? null, $expiresAt),
-            ]);
+            $payment->update($channel->kind->usesHostedPage()
+                ? $this->startSession($payment, $channel, $expiresAt)
+                : $this->startRequest($payment, $channel, $expiresAt, $mobileNumber));
         } catch (BillingException $e) {
             $payment->forceFill(['status' => PaymentStatus::Failed])->save();
 
@@ -171,13 +166,59 @@ class StartCheckout
         return $payment;
     }
 
-    // One open payment request per user, so switching method or plan cannot be paid twice.
+    /**
+     * @return array<string, mixed> payment attributes
+     */
+    private function startRequest(Payment $payment, PaymentChannel $channel, CarbonImmutable $expiresAt, ?string $mobileNumber): array
+    {
+        $request = $this->xendit->createPaymentRequest($payment, $channel, $expiresAt, $mobileNumber);
+        $code = $this->payCode($request, $channel);
+
+        if (($code === null && ! $channel->needs_mobile_number)
+            || ($request['reference_id'] ?? null) !== $payment->order_id
+            || ! in_array($request['status'] ?? null, self::PAYABLE_STATUSES, true)) {
+            report(new BillingException('Xendit create payment request: unexpected response'));
+
+            throw BillingException::unavailable();
+        }
+
+        return [
+            'xendit_payment_request_id' => (string) $request['payment_request_id'],
+            'pay_code' => $code,
+            'expires_at' => $this->expiry($request['channel_properties']['expires_at'] ?? null, $expiresAt),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed> payment attributes
+     */
+    private function startSession(Payment $payment, PaymentChannel $channel, CarbonImmutable $expiresAt): array
+    {
+        $session = $this->xendit->createSession($payment, $channel, $expiresAt);
+        $link = $session['payment_link_url'] ?? null;
+
+        if (! $this->usableCode($link, 'WEB_URL')
+            || ($session['reference_id'] ?? null) !== $payment->order_id
+            || ($session['status'] ?? null) !== self::SESSION_PAYABLE_STATUS) {
+            report(new BillingException('Xendit create session: unexpected response'));
+
+            throw BillingException::unavailable();
+        }
+
+        return [
+            'xendit_payment_session_id' => (string) $session['payment_session_id'],
+            'pay_code' => $link,
+            'expires_at' => $this->expiry($session['expires_at'] ?? null, $expiresAt),
+        ];
+    }
+
+    // One open payment per user, so switching method or plan cannot be paid twice.
     private function cancelOpenRequests(User $user): void
     {
         $open = Payment::query()
             ->where('user_id', $user->getKey())
             ->where('status', PaymentStatus::Pending->value)
-            ->whereNotNull('xendit_payment_request_id')
+            ->inApp()
             ->where('expires_at', '>', now())
             ->get();
 
@@ -195,7 +236,7 @@ class StartCheckout
     {
         $actions = array_filter((array) ($request['actions'] ?? []), 'is_array');
 
-        foreach ($channel->descriptors() as $descriptor) {
+        foreach ($channel->kind->descriptors() as $descriptor) {
             foreach ($actions as $action) {
                 $value = ($action['descriptor'] ?? null) === $descriptor ? ($action['value'] ?? null) : null;
 
@@ -234,7 +275,7 @@ class StartCheckout
         };
 
         if (preg_match(self::MOBILE_PATTERN, $normalized) !== 1) {
-            throw new BillingException('Nomor OVO tidak valid. Gunakan nomor HP yang terdaftar di OVO, mis. 0812xxxxxxx.');
+            throw new BillingException('Nomor HP tidak valid. Gunakan nomor yang terdaftar di e-wallet, mis. 0812xxxxxxx.');
         }
 
         return $normalized;

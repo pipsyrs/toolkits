@@ -11,12 +11,13 @@
 <div class="mx-auto max-w-3xl">
     <header class="mb-6 flex items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Konversi Gambar</h1>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Ubah format gambar ke JPG, PNG, atau WebP.</p>
+            <p class="eyebrow">Gambar</p>
+            <h1 class="page-title">Konversi Gambar</h1>
+            <p class="mt-1 text-sm text-muted">Ubah format gambar ke JPG, PNG, atau WebP.</p>
         </div>
     </header>
 
-    <div class="card space-y-5 p-6">
+    <div class="glass-strong space-y-5 p-6">
         <x-file-dropzone :accept="$accept" :max-files="$maxFiles" :max-mb="$maxMb" multiple />
 
         <div>

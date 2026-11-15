@@ -98,46 +98,50 @@
                 </tbody>
                 <tbody>
                     @foreach($groups as $group => $entries)
-                        <tr class="bg-fg/4">
-                            <th scope="colgroup" colspan="{{ $plans->count() + 1 }}" class="sticky left-0 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">{{ $group }}</th>
-                        </tr>
-                        @foreach($entries as $key => $entry)
-                            <tr wire:key="row-{{ $key }}" class="border-b border-line/70 last:border-0">
-                                <th scope="row" class="sticky left-0 z-10 bg-surface px-4 py-2.5 text-left font-medium text-fg">
-                                    {{ $entry['label'] }}
-                                    @if(! empty($entry['help']) || ! empty($entry['nullable']))
-                                        <span class="block text-xs font-normal text-muted">{{ $entry['help'] ?? 'Kosong = tak terbatas' }}</span>
-                                    @endif
-                                </th>
-                                @foreach($plans as $plan)
-                                    @php
-                                        $path = "values.{$plan->slug}.{$key}";
-                                        $id = "v-{$plan->slug}-{$key}";
-                                        $label = $entry['label'].' untuk '.$plan->name;
-                                    @endphp
-                                    <td wire:key="cell-{{ $plan->id }}-{{ $key }}" class="{{ $cell }}">
-                                        @if($entry['type'] === Entitlements::BOOL)
-                                            <input id="{{ $id }}" type="checkbox" wire:model="{{ $path }}" aria-label="{{ $label }}"
-                                                class="h-4 w-4 rounded border-line text-ok focus:ring-fg">
-                                        @elseif($entry['type'] === Entitlements::SELECT)
-                                            <select id="{{ $id }}" wire:model="{{ $path }}" aria-label="{{ $label }}"
-                                                @class(['input py-1.5 text-sm', 'border-danger' => $errors->has($path)])>
-                                                @foreach($entry['options'] as $value => $optionLabel)
-                                                    <option value="{{ $value }}">{{ $optionLabel }}</option>
-                                                @endforeach
-                                            </select>
-                                        @else
-                                            <input id="{{ $id }}" type="number" inputmode="numeric" wire:model="{{ $path }}" aria-label="{{ $label }}"
-                                                min="{{ $entry['min'] }}" max="{{ $entry['max'] }}" step="1"
-                                                placeholder="{{ ! empty($entry['nullable']) ? '∞' : '' }}"
-                                                @if($errors->has($path)) aria-invalid="true" aria-describedby="{{ $id }}-error" @endif
-                                                @class(['input mx-auto w-24 py-1.5 text-right tabular-nums', 'border-danger' => $errors->has($path)])>
-                                        @endif
-                                        @error($path) <p id="{{ $id }}-error" class="field-error text-left">{{ $message }}</p> @enderror
-                                    </td>
-                                @endforeach
+                        {{-- Fitur berbayar tiap alat diatur di halaman alatnya, bukan di sini. --}}
+                        @php $rows = collect($entries)->reject(fn ($entry) => ! empty($entry['feature'])); @endphp
+                        @if($rows->isNotEmpty())
+                            <tr class="bg-fg/4">
+                                <th scope="colgroup" colspan="{{ $plans->count() + 1 }}" class="sticky left-0 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">{{ $group }}</th>
                             </tr>
-                        @endforeach
+                            @foreach($rows as $key => $entry)
+                                <tr wire:key="row-{{ $key }}" class="border-b border-line/70 last:border-0">
+                                    <th scope="row" class="sticky left-0 z-10 bg-surface px-4 py-2.5 text-left font-medium text-fg">
+                                        {{ $entry['label'] }}
+                                        @if(! empty($entry['help']) || ! empty($entry['nullable']))
+                                            <span class="block text-xs font-normal text-muted">{{ $entry['help'] ?? 'Kosong = tak terbatas' }}</span>
+                                        @endif
+                                    </th>
+                                    @foreach($plans as $plan)
+                                        @php
+                                            $path = "values.{$plan->slug}.{$key}";
+                                            $id = "v-{$plan->slug}-{$key}";
+                                            $label = $entry['label'].' untuk '.$plan->name;
+                                        @endphp
+                                        <td wire:key="cell-{{ $plan->id }}-{{ $key }}" class="{{ $cell }}">
+                                            @if($entry['type'] === Entitlements::BOOL)
+                                                <input id="{{ $id }}" type="checkbox" wire:model="{{ $path }}" aria-label="{{ $label }}"
+                                                    class="h-4 w-4 rounded border-line text-ok focus:ring-fg">
+                                            @elseif($entry['type'] === Entitlements::SELECT)
+                                                <select id="{{ $id }}" wire:model="{{ $path }}" aria-label="{{ $label }}"
+                                                    @class(['input py-1.5 text-sm', 'border-danger' => $errors->has($path)])>
+                                                    @foreach($entry['options'] as $value => $optionLabel)
+                                                        <option value="{{ $value }}">{{ $optionLabel }}</option>
+                                                    @endforeach
+                                                </select>
+                                            @else
+                                                <input id="{{ $id }}" type="number" inputmode="numeric" wire:model="{{ $path }}" aria-label="{{ $label }}"
+                                                    min="{{ $entry['min'] }}" max="{{ $entry['max'] }}" step="1"
+                                                    placeholder="{{ ! empty($entry['nullable']) ? '∞' : '' }}"
+                                                    @if($errors->has($path)) aria-invalid="true" aria-describedby="{{ $id }}-error" @endif
+                                                    @class(['input mx-auto w-24 py-1.5 text-right tabular-nums', 'border-danger' => $errors->has($path)])>
+                                            @endif
+                                            @error($path) <p id="{{ $id }}-error" class="field-error text-left">{{ $message }}</p> @enderror
+                                        </td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                        @endif
                     @endforeach
                 </tbody>
             </table>

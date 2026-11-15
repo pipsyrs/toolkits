@@ -30,6 +30,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'not.blocked' => EnsureNotBlocked::class,
         ]);
 
+        // Only a proxy on this machine (ngrok agent, local nginx) may set X-Forwarded-*; remote clients cannot spoof IP or https.
+        $middleware->trustProxies(at: ['127.0.0.1', '::1']);
+
         $middleware->web(append: [
             EnsureGuestId::class,
             EnsureNotBlocked::class,

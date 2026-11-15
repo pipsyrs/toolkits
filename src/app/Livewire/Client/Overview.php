@@ -12,7 +12,7 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('layouts::client')]
-#[Title('Ringkasan')]
+#[Title('Dashboard')]
 class Overview extends Component
 {
     use ResolvesVisitor;

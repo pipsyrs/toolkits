@@ -43,7 +43,8 @@ class PlanMatrixTest extends TestCase
         $this->actingAs($this->superadmin())->get(route('admin.plans.edit'))
             ->assertOk()
             ->assertSee('Ukuran file maks (MB)')
-            ->assertSee('Unduh format SVG')
+            // Fitur berbayar alat pindah ke halaman alatnya, tidak lagi di matriks.
+            ->assertDontSee('Unduh format SVG')
             ->assertSeeInOrder(['free', 'pro'])
             ->assertDontSee('wire:model="values.guest.ads"', false);
     }
@@ -55,7 +56,6 @@ class PlanMatrixTest extends TestCase
             ->set('values.free.max_file_mb', 5)
             ->set('values.free.file_ops_per_day', '')
             ->set('values.free.ads', false)
-            ->set('values.free.tool_qr_code_svg', true)
             // Not a registry key: must be ignored.
             ->set('values.free.is_admin', true)
             ->call('save')
@@ -66,7 +66,6 @@ class PlanMatrixTest extends TestCase
         $this->assertSame(5, $free['max_file_mb']);
         $this->assertNull($free['file_ops_per_day']);
         $this->assertFalse($free['ads']);
-        $this->assertTrue($free['tool_qr_code_svg']);
         $this->assertArrayNotHasKey('is_admin', $free);
         // Seeded keys outside the matrix survive.
         $this->assertSame('total', $free['analytics']);

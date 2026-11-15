@@ -1,4 +1,9 @@
-@php($tools = app(\App\Services\Tools\ToolCatalog::class)->all())
+@php
+    $catalog = app(\App\Services\Tools\ToolCatalog::class);
+    $tools = $catalog->all();
+    // Only categories that currently hold a tool get a filter button.
+    $filters = collect($catalog->categories())->only(collect($tools)->pluck('category')->unique()->all());
+@endphp
 
 <x-layouts::app title="Semua alat">
     <div x-data="{ filter: 'all' }">
@@ -9,7 +14,7 @@
 
         {{-- Filter kategori --}}
         <div class="mb-6 flex flex-wrap gap-2" role="tablist" aria-label="Filter kategori">
-            @foreach([['all', 'Semua'], ['link', 'Link'], ['image', 'Gambar'], ['pdf', 'PDF']] as [$val, $label])
+            @foreach(collect(['all' => 'Semua'])->union($filters) as $val => $label)
                 <button type="button" role="tab" @click="filter = '{{ $val }}'" :aria-selected="filter === '{{ $val }}'"
                     class="rounded-full px-4 py-1.5 text-sm font-medium transition"
                     :class="filter === '{{ $val }}'

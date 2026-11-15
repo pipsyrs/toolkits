@@ -13,6 +13,7 @@ class ToolSetting extends Model
     protected $fillable = [
         'slug',
         'status',
+        'category',
     ];
 
     protected function casts(): array

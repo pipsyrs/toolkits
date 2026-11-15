@@ -15,20 +15,21 @@
 
 <div class="mx-auto max-w-3xl">
     <header class="mb-6">
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Kompres PDF</h1>
-        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Perkecil ukuran file PDF.</p>
+        <p class="eyebrow">PDF</p>
+        <h1 class="page-title">Kompres PDF</h1>
+        <p class="mt-1 text-sm text-muted">Perkecil ukuran file PDF.</p>
     </header>
 
-    <div class="card space-y-5 p-6">
+    <div class="glass-strong space-y-5 p-6">
         <x-file-dropzone :accept="$accept" :max-files="$maxFiles" :max-mb="$maxMb" />
 
         <fieldset>
             <legend class="label">Tingkat kompresi</legend>
             <div class="grid gap-2 sm:grid-cols-3">
                 @foreach($levels as $val => [$label, $hint])
-                    <label class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2.5 text-sm has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 has-[:focus-visible]:outline-2 dark:border-slate-700 dark:has-[:checked]:bg-brand-600/10">
+                    <label class="cursor-pointer rounded-lg border border-line px-3 py-2.5 text-sm has-[:checked]:border-line-strong has-[:checked]:bg-sunken has-[:focus-visible]:outline-2">
                         <input type="radio" wire:model="level" value="{{ $val }}" class="sr-only">
-                        <span class="block font-medium text-slate-800 dark:text-slate-100">{{ $label }}</span>
+                        <span class="block font-medium text-fg">{{ $label }}</span>
                         <span class="mt-0.5 block text-xs text-muted">{{ $hint }}</span>
                     </label>
                 @endforeach

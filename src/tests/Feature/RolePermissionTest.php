@@ -7,7 +7,6 @@ use App\Actions\Admin\BlockUser;
 use App\Actions\Admin\DeleteRole;
 use App\Actions\Admin\DisableLink;
 use App\Actions\Admin\SaveRole;
-use App\Livewire\Admin\Roles\Form;
 use App\Livewire\Admin\Roles\Index as RolesIndex;
 use App\Livewire\Admin\Users\Index as UsersIndex;
 use App\Models\AdminAuditLog;
@@ -36,7 +35,6 @@ class RolePermissionTest extends TestCase
         '/admin/audit-logs' => 'audit.view',
         '/admin/settings' => 'settings.manage',
         '/admin/roles' => 'roles.manage',
-        '/admin/roles/create' => 'roles.manage',
     ];
 
     protected function setUp(): void
@@ -279,7 +277,7 @@ class RolePermissionTest extends TestCase
         session(['auth.password_confirmed_at' => time() - 1000]);
 
         $this->actingAs($admin);
-        Livewire::test(Form::class)->set('name', 'new-role')->call('save')->assertRedirect(route('password.confirm'));
+        Livewire::test(RolesIndex::class)->call('openCreate')->set('name', 'new-role')->call('save')->assertRedirect(route('password.confirm'));
         $this->assertNull(Role::where('name', 'new-role')->first());
 
         $this->expectException(AuthorizationException::class);
@@ -292,24 +290,40 @@ class RolePermissionTest extends TestCase
         $this->actingAs($manager);
         $this->confirm();
 
-        Livewire::test(Form::class)
+        Livewire::test(RolesIndex::class)
+            ->call('openCreate')
             ->set('name', 'escalate')
             ->set('selected', ['settings.manage'])
             ->call('save')
-            ->assertHasErrors('selected');
+            ->assertHasErrors('selected')
+            ->assertSet('formOpen', true);
 
-        Livewire::test(Form::class)
+        Livewire::test(RolesIndex::class)
+            ->call('openCreate')
             ->set('name', 'link-viewer')
             ->set('selected', ['links.view'])
             ->call('save')
             ->assertHasNoErrors()
-            ->assertRedirect(route('admin.roles.index'));
+            ->assertSet('formOpen', false)
+            ->assertNoRedirect();
 
         $this->assertTrue(Role::findByName('link-viewer', 'web')->hasPermissionTo('links.view'));
 
         Livewire::test(RolesIndex::class)->assertViewHas('editable', fn ($e) => $e[Role::findByName('link-viewer', 'web')->id] === true
             && $e[Role::findByName('role-manager', 'web')->id] === false
             && $e[Role::findByName(User::SUPERADMIN_ROLE, 'web')->id] === false);
+
+        // Edit in the same modal: loads the role, saves without leaving the list.
+        $linkViewer = Role::findByName('link-viewer', 'web');
+        Livewire::test(RolesIndex::class)
+            ->call('openEdit', $linkViewer->id)
+            ->assertSet('editingId', $linkViewer->id)
+            ->assertSet('name', 'link-viewer')
+            ->set('name', 'link-reader')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('formOpen', false);
+        $this->assertSame('link-reader', $linkViewer->fresh()->name);
     }
 
     public function test_cannot_assign_roles_to_self(): void

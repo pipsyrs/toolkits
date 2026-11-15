@@ -6,7 +6,7 @@
         'general' => ['Umum', 'Identitas situs dan kontak dukungan.', 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'],
         'mail' => ['Email / SMTP', 'Server pengirim untuk verifikasi, reset sandi, dan notifikasi.', 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
         'google' => ['Login Google', 'Kredensial OAuth dari Google Cloud Console.', 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z'],
-        'xendit' => ['Xendit', 'Pembayaran invoice dan verifikasi webhook.', 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'],
+        'xendit' => ['Payment gateway', 'Pembayaran checkout dan verifikasi webhook.', 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'],
     ];
     $sourceBadge = [
         'db' => ['Database', 'bg-ok/10 text-ok'],
@@ -26,7 +26,7 @@
 
     <div class="flex gap-3 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-warn" role="note">
         <svg class="mt-0.5 h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-        <p><strong class="font-semibold">Perubahan SMTP, Google, dan Xendit setara akses superadmin.</strong> Kredensial yang salah dapat memutus login, email, atau pembayaran. Semua perubahan dicatat di audit log.</p>
+        <p><strong class="font-semibold">Perubahan SMTP, Google, dan payment gateway setara akses superadmin.</strong> Kredensial yang salah dapat memutus login, email, atau pembayaran. Semua perubahan dicatat di audit log.</p>
     </div>
 
     @if($decryptErrors ?? false)

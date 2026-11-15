@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\Admin\Plans\Limits;
+use App\Livewire\Admin\Tools\Show;
 use App\Livewire\Tools\QrCode;
 use App\Models\User;
 use Database\Seeders\PlanSeeder;
@@ -199,13 +199,12 @@ class QrCodeTest extends TestCase
         $this->assertTrue($this->scannable($uri));
     }
 
-    public function test_admin_can_open_a_feature_to_free_in_the_plan_matrix(): void
+    public function test_admin_can_open_a_feature_to_free_on_the_tool_page(): void
     {
         $this->seed(RoleSeeder::class);
         $admin = User::factory()->create()->assignRole('superadmin');
-        Livewire::actingAs($admin)->test(Limits::class)
-            ->set('values.free.tool_qr_code_premium_frame', true)
-            ->call('save')
+        Livewire::actingAs($admin)->test(Show::class, ['slug' => 'qr-code'])
+            ->set('featurePlan.premium_frame', 'free')
             ->assertHasNoErrors();
         auth()->logout();
 

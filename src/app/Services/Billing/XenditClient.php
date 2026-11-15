@@ -2,10 +2,10 @@
 
 namespace App\Services\Billing;
 
-use App\Enums\PaymentChannel;
 use App\Enums\PaymentChannelKind;
 use App\Exceptions\BillingException;
 use App\Models\Payment;
+use App\Models\PaymentChannel;
 use App\Services\Tier\PlanLimits;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -15,7 +15,8 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
-// Xendit via Http facade (no SDK): Payments API v3 for in-app checkout; Invoice v2 GET for legacy invoices.
+// Xendit via Http facade (no SDK): Payments API v3 for in-app checkout, Payment Sessions for cards (hosted page),
+// Invoice v2 GET for legacy invoices.
 class XenditClient
 {
     private const API_VERSION = '2024-11-11';
@@ -26,8 +27,11 @@ class XenditClient
 
     private const EXPIRY_MAX_MINUTES = 10080;
 
-    // OVO number field in channel_properties (Payments API v3).
-    private const OVO_MOBILE_FIELD = 'account_mobile_number';
+    // Sessions must expire at least 10 minutes after Xendit receives them; one extra minute covers the request itself.
+    private const SESSION_EXPIRY_MIN_MINUTES = 11;
+
+    // Mobile number field in channel_properties for push-notification e-wallets such as OVO (Payments API v3).
+    private const MOBILE_FIELD = 'account_mobile_number';
 
     // Channel not activated on the Xendit account (or temporarily down).
     private const CHANNEL_DOWN_CODES = ['CHANNEL_UNAVAILABLE', 'CHANNEL_NOT_ACTIVATED'];
@@ -46,10 +50,10 @@ class XenditClient
 
     public function expiresAt(PaymentChannel $channel, CarbonImmutable $from): CarbonImmutable
     {
-        $minutes = $channel->fixedExpiryMinutes()
-            ?? max(self::EXPIRY_MIN_MINUTES, min(self::EXPIRY_MAX_MINUTES, (int) config('services.xendit.expiry_minutes', 60)));
+        $minimum = $channel->kind->usesHostedPage() ? self::SESSION_EXPIRY_MIN_MINUTES : self::EXPIRY_MIN_MINUTES;
+        $minutes = $channel->fixed_expiry_minutes ?? (int) config('services.xendit.expiry_minutes', 60);
 
-        return $from->addMinutes($minutes);
+        return $from->addMinutes(max($minimum, min(self::EXPIRY_MAX_MINUTES, $minutes)));
     }
 
     /**
@@ -66,9 +70,9 @@ class XenditClient
             'currency' => $payment->currency,
             'request_amount' => $payment->amount,
             'capture_method' => 'AUTOMATIC',
-            'channel_code' => $channel->code(),
+            'channel_code' => $channel->gateway_code,
             'channel_properties' => $this->channelProperties($payment, $channel, $expiresAt, $mobileNumber),
-            'description' => config('app.name').' '.app(PlanLimits::class)->label($payment->plan).' — '.$payment->period->label(),
+            'description' => $this->description($payment),
         ];
 
         // Idempotency key = order id, so retrying after a lost response cannot create a second charge.
@@ -77,6 +81,56 @@ class XenditClient
             ->retry(2, 300, fn (Throwable $e) => $e instanceof ConnectionException);
 
         return $this->send(fn () => $request->post('/v3/payment_requests', $body), 'create payment request', 'payment_request_id');
+    }
+
+    /**
+     * Hosted checkout limited to one channel; the customer enters card details on Xendit's page.
+     * Not retried: sessions document no idempotency key, so a retry could open a second payable session.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws BillingException
+     */
+    public function createSession(Payment $payment, PaymentChannel $channel, CarbonImmutable $expiresAt): array
+    {
+        $returnUrl = $this->returnUrl($payment);
+
+        return $this->send(fn () => $this->request()->post('/sessions', [
+            'reference_id' => $payment->order_id,
+            'session_type' => 'PAY',
+            'mode' => 'PAYMENT_LINK',
+            'country' => 'ID',
+            'currency' => $payment->currency,
+            'amount' => $payment->amount,
+            'allowed_payment_channels' => [$channel->gateway_code],
+            'expires_at' => $expiresAt->utc()->toIso8601ZuluString(),
+            'locale' => 'id',
+            'description' => $this->description($payment),
+            'success_return_url' => $returnUrl,
+            'cancel_return_url' => $returnUrl,
+        ]), 'create session', 'payment_session_id');
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws BillingException
+     */
+    public function getSession(string $id): array
+    {
+        $request = $this->request()->retry(3, 300, $this->retryableRead(...));
+
+        return $this->send(fn () => $request->get('/sessions/'.rawurlencode($id)), 'get session', 'payment_session_id');
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws BillingException
+     */
+    public function cancelSession(string $id): array
+    {
+        return $this->send(fn () => $this->request()->post('/sessions/'.rawurlencode($id).'/cancel'), 'cancel session', 'payment_session_id');
     }
 
     /**
@@ -134,17 +188,36 @@ class XenditClient
      */
     private function channelProperties(Payment $payment, PaymentChannel $channel, CarbonImmutable $expiresAt, ?string $mobileNumber): array
     {
-        if ($channel->kind() !== PaymentChannelKind::EWallet) {
+        if ($channel->kind !== PaymentChannelKind::EWallet) {
             $properties = ['expires_at' => $expiresAt->utc()->toIso8601ZuluString()];
 
-            return $channel->isQris() ? $properties : $properties + ['display_name' => $this->displayName()];
+            return $channel->kind === PaymentChannelKind::Qris ? $properties : $properties + ['display_name' => $this->displayName()];
         }
 
         // After approving in the e-wallet, the customer lands on the status page of this payment.
-        $returnUrl = route('dashboard.billing.return', $payment);
+        $returnUrl = $this->returnUrl($payment);
         $properties = ['success_return_url' => $returnUrl, 'failure_return_url' => $returnUrl];
 
-        return $channel->needsMobileNumber() ? $properties + [self::OVO_MOBILE_FIELD => (string) $mobileNumber] : $properties;
+        return $channel->needs_mobile_number ? $properties + [self::MOBILE_FIELD => (string) $mobileNumber] : $properties;
+    }
+
+    // The gateway rejects non-https return URLs (INVALID_URL); fail before calling it, with a hint for the operator.
+    private function returnUrl(Payment $payment): string
+    {
+        $url = route('dashboard.billing.return', $payment);
+
+        if (! str_starts_with($url, 'https://')) {
+            report(new BillingException('Xendit return URL must be https; open the app over https or check the trusted proxy (got '.parse_url($url, PHP_URL_SCHEME).'://'.parse_url($url, PHP_URL_HOST).')'));
+
+            throw BillingException::unavailable();
+        }
+
+        return $url;
+    }
+
+    private function description(Payment $payment): string
+    {
+        return config('app.name').' '.app(PlanLimits::class)->label($payment->plan).' — '.$payment->period->label();
     }
 
     private function retryableRead(Throwable $e): bool

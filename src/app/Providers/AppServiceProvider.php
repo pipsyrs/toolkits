@@ -8,6 +8,7 @@ use App\Listeners\AuditTwoFactorChanges;
 use App\Models\BlockedDomain;
 use App\Models\User;
 use App\Observers\BlockedDomainObserver;
+use App\Services\Billing\PaymentChannelCatalog;
 use App\Services\Settings\SettingRegistry;
 use App\Services\Settings\SettingsRepository;
 use Illuminate\Auth\Middleware\EnsureEmailIsVerified;
@@ -26,6 +27,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(SettingRegistry::class);
         $this->app->singleton(SettingsRepository::class);
+        $this->app->scoped(PaymentChannelCatalog::class);
     }
 
     /**

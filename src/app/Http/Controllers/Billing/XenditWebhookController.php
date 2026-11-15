@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Actions\Billing\HandleCardSessionCallback;
 use App\Actions\Billing\HandleXenditCallback;
 use App\Actions\Billing\HandleXenditPaymentCallback;
 use App\Http\Controllers\Controller;
@@ -16,6 +17,9 @@ class XenditWebhookController extends Controller
 {
     // Payments API v3 events that can change a payment request; others are acknowledged and dropped.
     private const PAYMENT_EVENT_PATTERN = '/^(payment|payment_request)\.[a-z_]+$/';
+
+    // Payment Sessions (card checkout) events.
+    private const SESSION_EVENT_PATTERN = '/^payment_session\.[a-z_]+$/';
 
     // Legacy Invoice v2 callback.
     public function __invoke(Request $request, HandleXenditCallback $handler): JsonResponse
@@ -41,7 +45,7 @@ class XenditWebhookController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function payments(Request $request, HandleXenditPaymentCallback $handler): JsonResponse
+    public function payments(Request $request, HandleXenditPaymentCallback $handler, HandleCardSessionCallback $sessions): JsonResponse
     {
         if (! $this->hasValidToken($request)) {
             return response()->json(['ok' => false], 401);
@@ -50,13 +54,40 @@ class XenditWebhookController extends Controller
         $payload = $request->json()->all();
         $event = $payload['event'] ?? null;
 
-        if (! is_string($event) || strlen($event) > 40 || preg_match(self::PAYMENT_EVENT_PATTERN, $event) !== 1) {
+        if (! is_string($event) || strlen($event) > 40) {
+            return response()->json(['ok' => true]);
+        }
+
+        if (preg_match(self::SESSION_EVENT_PATTERN, $event) === 1) {
+            return $this->session($payload, $sessions);
+        }
+
+        if (preg_match(self::PAYMENT_EVENT_PATTERN, $event) !== 1) {
             return response()->json(['ok' => true]);
         }
 
         $validator = Validator::make($payload, [
             'data' => ['required', 'array'],
             'data.payment_request_id' => ['required', 'string', 'max:64', 'regex:/^pr-[A-Za-z0-9-]+$/'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['ok' => false], 422);
+        }
+
+        $handler->handle($payload);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function session(array $payload, HandleCardSessionCallback $handler): JsonResponse
+    {
+        $validator = Validator::make($payload, [
+            'data' => ['required', 'array'],
+            'data.payment_session_id' => ['required', 'string', 'max:64', 'regex:/^ps-[A-Za-z0-9]+$/'],
         ]);
 
         if ($validator->fails()) {

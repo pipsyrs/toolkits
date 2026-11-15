@@ -9,22 +9,23 @@
 
 <div class="mx-auto max-w-3xl">
     <header class="mb-6">
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Pisah PDF</h1>
-        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Ambil halaman tertentu atau pecah setiap halaman jadi file terpisah.</p>
+        <p class="eyebrow">PDF</p>
+        <h1 class="page-title">Pisah PDF</h1>
+        <p class="mt-1 text-sm text-muted">Ambil halaman tertentu atau pecah setiap halaman jadi file terpisah.</p>
     </header>
 
-    <div class="card space-y-5 p-6">
+    <div class="glass-strong space-y-5 p-6">
         <x-file-dropzone :accept="$accept" :max-files="1" :max-mb="$maxMb" />
 
         <fieldset>
             <legend class="label">Mode</legend>
             <div class="flex flex-col gap-2 sm:flex-row">
-                <label class="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2.5 text-sm has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 dark:border-slate-700 dark:has-[:checked]:bg-brand-600/10">
-                    <input type="radio" wire:model.live="mode" value="extract" class="text-brand-600 focus:ring-brand-500">
+                <label class="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-sm has-[:checked]:border-line-strong has-[:checked]:bg-sunken">
+                    <input type="radio" wire:model.live="mode" value="extract" class="text-ok focus:ring-fg">
                     Ambil rentang halaman
                 </label>
-                <label class="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2.5 text-sm has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 dark:border-slate-700 dark:has-[:checked]:bg-brand-600/10">
-                    <input type="radio" wire:model.live="mode" value="each" class="text-brand-600 focus:ring-brand-500">
+                <label class="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-sm has-[:checked]:border-line-strong has-[:checked]:bg-sunken">
+                    <input type="radio" wire:model.live="mode" value="each" class="text-ok focus:ring-fg">
                     Pecah tiap halaman
                 </label>
             </div>
@@ -34,8 +35,8 @@
             <div>
                 <label for="ranges" class="label">Rentang halaman</label>
                 <input id="ranges" type="text" wire:model="ranges" placeholder="1-3,5,8-10"
-                    class="input @error('ranges') border-rose-400 @enderror" inputmode="numeric">
-                <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Pisahkan dengan koma. Contoh: <code>1-3,5,8-10</code></p>
+                    class="input @error('ranges') border-danger @enderror" inputmode="numeric">
+                <p class="mt-1.5 text-xs text-muted">Pisahkan dengan koma. Contoh: <code>1-3,5,8-10</code></p>
                 @error('ranges') <p class="field-error">{{ $message }}</p> @enderror
             </div>
         @endif

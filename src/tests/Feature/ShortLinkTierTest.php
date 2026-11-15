@@ -133,13 +133,11 @@ class ShortLinkTierTest extends TestCase
 
     public function test_guest_ip_limit_applies_across_guest_ids(): void
     {
-        // Visitors without an account use Free: IP cap = links_per_day × ip_limit_multiplier (3 × 3).
+        // Visitors without an account use Free: the IP cap equals links_per_day.
         $this->setFreeLimits(['links_per_day' => 3]);
 
         for ($g = 0; $g < 3; $g++) {
-            for ($i = 0; $i < 3; $i++) {
-                $this->create(null, ['target_url' => "https://example.com/{$g}/{$i}"], 'g-'.$g);
-            }
+            $this->create(null, ['target_url' => "https://example.com/{$g}"], 'g-'.$g);
         }
 
         $this->expectException(QuotaExceededException::class);
@@ -156,9 +154,9 @@ class ShortLinkTierTest extends TestCase
 
     public function test_duplicate_alias_rejected_case_insensitively(): void
     {
-        $this->create(User::factory()->create(), ['target_url' => 'https://example.com', 'alias' => 'promo']);
+        $this->create(User::factory()->pro()->create(), ['target_url' => 'https://example.com', 'alias' => 'promo']);
 
-        $other = User::factory()->create();
+        $other = User::factory()->pro()->create();
         $this->assertArrayHasKey('alias', $this->errorsFor($other, ['target_url' => 'https://example.com', 'alias' => 'promo']));
         $this->assertArrayHasKey('alias', $this->errorsFor($other, ['target_url' => 'https://example.com', 'alias' => 'PROMO']));
         $this->assertSame(1, Link::where('code', 'promo')->count());
@@ -212,10 +210,10 @@ class ShortLinkTierTest extends TestCase
 
     public function test_shorten_component_reports_quota_error(): void
     {
-        // Livewire::test has no tk_gid cookie, so the per-IP cap (3 x 3) is what binds.
+        // Livewire::test has no tk_gid cookie, so the per-IP cap (= links_per_day) is what binds.
         $this->setFreeLimits(['links_per_day' => 3]);
 
-        for ($i = 0; $i < 9; $i++) {
+        for ($i = 0; $i < 3; $i++) {
             Livewire::test(Shorten::class)->set('targetUrl', 'https://example.com/'.$i)->call('shorten')->assertHasNoErrors();
         }
 
