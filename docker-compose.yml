@@ -1,0 +1,92 @@
+services:
+  # PHP-FPM: menjalankan Laravel (artisan, request)
+  app:
+    build:
+      context: ./docker/php
+      args:
+        UID: ${WWWUSER:-1000}
+        GID: ${WWWGROUP:-1000}
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Nginx: web entrypoint, serve src/public
+  web:
+    image: nginx:1.27-alpine
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - ./src:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  # Database
+  db:
+    image: mariadb:11
+    # Kredensial diambil dari src/.env (wajib ada)
+    environment:
+      MARIADB_DATABASE: ${DB_DATABASE:?set DB_DATABASE di src/.env}
+      MARIADB_USER: ${DB_USERNAME:?set DB_USERNAME di src/.env}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD di src/.env}
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    ports:
+      - "${FORWARD_DB_PORT:-3306}:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Vite dev server (opsional): docker compose --profile assets up
+  node:
+    image: node:20-alpine
+    working_dir: /var/www/html
+    volumes:
+      - ./src:/var/www/html
+    ports:
+      - "${VITE_PORT:-5173}:5173"
+    command: sh -c "npm install && npm run dev -- --host"
+    profiles: [assets]
+
+  # Queue worker (opsional): docker compose --profile worker up
+  queue:
+    build:
+      context: ./docker/php
+      args:
+        UID: ${WWWUSER:-1000}
+        GID: ${WWWGROUP:-1000}
+    volumes:
+      - ./src:/var/www/html
+    command: php artisan queue:work --queue=pro,default --tries=3 --timeout=90
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: [worker]
+    restart: unless-stopped
+
+  # Scheduler (opsional): docker compose --profile worker up
+  scheduler:
+    build:
+      context: ./docker/php
+      args:
+        UID: ${WWWUSER:-1000}
+        GID: ${WWWGROUP:-1000}
+    volumes:
+      - ./src:/var/www/html
+    command: php artisan schedule:work
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: [worker]
+    restart: unless-stopped
+
+volumes:
+  dbdata:
