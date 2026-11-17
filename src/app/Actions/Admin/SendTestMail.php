@@ -16,7 +16,7 @@ class SendTestMail
      */
     public function handle(User $actor): void
     {
-        Gate::forUser($actor)->authorize('settings.manage');
+        Gate::forUser($actor)->authorize('settings.update');
 
         $limiterKey = 'settings-test-mail:'.$actor->getKey();
 

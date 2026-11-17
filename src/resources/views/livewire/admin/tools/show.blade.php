@@ -91,7 +91,7 @@
             <section class="glass p-5 sm:p-6" aria-labelledby="features-heading">
                 <h3 id="features-heading" class="font-display text-lg font-bold tracking-tight text-fg">Fitur berbayar</h3>
                 <p class="mt-1 max-w-prose text-sm text-muted">Tiap fitur hanya tersedia untuk paket yang dipilih. "Terkunci" berarti tidak ada paket yang memperolehnya.</p>
-                @can('plans.manage')
+                @can('plans.update')
                     <dl class="mt-4 space-y-4">
                         @foreach($features as $feature => $label)
                             @php $current = $featurePlan[$feature] ?? ''; @endphp

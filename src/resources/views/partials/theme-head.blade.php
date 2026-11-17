@@ -11,3 +11,6 @@
         d.style.colorScheme = t;
     })();
 </script>
+{{-- Favicon: unggahan admin (PNG) bila ada; partial ini dipakai di semua <head>. --}}
+@php($favicon = \App\Support\Branding::faviconUrl())
+<link rel="icon" href="{{ $favicon ?? asset('favicon.ico') }}" @if($favicon) type="image/png" @endif>

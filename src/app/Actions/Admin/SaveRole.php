@@ -2,7 +2,7 @@
 
 namespace App\Actions\Admin;
 
-use App\Enums\PermissionName;
+use App\Enums\AdminResource;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Admin\AuditLogger;
@@ -45,7 +45,7 @@ class SaveRole
                 Rule::unique('roles', 'name')->where('guard_name', 'web')->ignore($role?->getKey()),
             ],
             'permissions' => ['array'],
-            'permissions.*' => ['string', 'distinct', Rule::in(PermissionName::values())],
+            'permissions.*' => ['string', 'distinct', Rule::in(AdminResource::permissions())],
         ], [
             'name.regex' => 'Nama role: huruf kecil, angka, - atau _, 3–40 karakter.',
         ], ['name' => 'nama role', 'permissions' => 'permission'])->validate();
@@ -54,7 +54,7 @@ class SaveRole
 
         // Any admin permission implies admin.access.
         if ($selected->isNotEmpty()) {
-            $selected->push(PermissionName::AdminAccess->value);
+            $selected->push(AdminResource::PANEL_ACCESS);
         }
 
         $selected = $selected->unique()->sort()->values();

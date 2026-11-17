@@ -40,7 +40,7 @@ class PaymentMethodTypesTest extends TestCase
     {
         $this->actingAs(User::factory()->create())->get('/admin/payment-method-types')->assertForbidden();
 
-        $finance = User::factory()->create()->assignRole(Role::create(['name' => 'finance', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'payments.view']));
+        $finance = User::factory()->create()->assignRole(Role::create(['name' => 'finance', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'payments.view_any']));
         $this->actingAs($finance)->get('/admin/payment-method-types')->assertForbidden();
         Livewire::actingAs($finance)->test(Index::class)->assertForbidden();
 

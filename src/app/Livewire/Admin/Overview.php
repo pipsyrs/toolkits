@@ -42,7 +42,7 @@ class Overview extends Component
         $signups = $stats->dailySignups($this->days);
         $links = $stats->dailyLinksByTier($this->days);
 
-        $revenue = $admin->can('payments.view') ? $stats->revenue() : null;
+        $revenue = $admin->can('payments.view_any') ? $stats->revenue() : null;
 
         return view('livewire.admin.overview', [
             'summary' => $stats->summary($this->days),
@@ -54,9 +54,9 @@ class Overview extends Component
                 'values' => array_values($revenue['months']),
                 'pending' => $revenue['pending'],
             ],
-            'topLinks' => $admin->can('links.view') ? $stats->topLinks() : null,
-            'topHosts' => $admin->can('links.view') ? $stats->topHosts($this->days) : null,
-            'audit' => $admin->can('audit.view') ? $stats->recentAudit() : null,
+            'topLinks' => $admin->can('links.view_any') ? $stats->topLinks() : null,
+            'topHosts' => $admin->can('links.view_any') ? $stats->topHosts($this->days) : null,
+            'audit' => $admin->can('audit.view_any') ? $stats->recentAudit() : null,
         ]);
     }
 

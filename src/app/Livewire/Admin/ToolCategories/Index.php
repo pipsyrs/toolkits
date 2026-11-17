@@ -21,7 +21,7 @@ class Index extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes, WithFormModal;
 
-    public const PERMISSION = 'tools.manage';
+    public const PERMISSION = 'tool_categories.view_any';
 
     // Only used when adding; the slug is fixed afterwards.
     public string $slug = '';

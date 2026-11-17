@@ -3,7 +3,8 @@
 namespace App\Actions\Admin;
 
 use App\Actions\Admin\Concerns\SwapsSortOrder;
-use App\Enums\PermissionName;
+use App\Enums\AdminResource;
+use App\Enums\PermissionAction;
 use App\Exceptions\FileProcessingException;
 use App\Models\PaymentChannel;
 use App\Models\PaymentMethod;
@@ -44,7 +45,7 @@ class ManagePaymentMethod
     // Null type = the type matching the channel kind, when it exists. The display name comes from the channel.
     public function add(User $admin, string $channel, ?string $typeId = null, ?string $ip = null, ?UploadedFile $logo = null): PaymentMethod
     {
-        return $this->withLogo($admin, $logo, function (?string $logoPath) use ($admin, $channel, $typeId, $ip) {
+        return $this->withLogo($admin, PermissionAction::Create, $logo, function (?string $logoPath) use ($admin, $channel, $typeId, $ip) {
             // Locked so the channel cannot be deleted before the method is saved.
             $value = PaymentChannel::query()->where('code', $channel)->lockForUpdate()->first()
                 ?? throw ValidationException::withMessages(['channel' => 'Channel tidak dikenal.']);
@@ -72,7 +73,7 @@ class ManagePaymentMethod
     // Null $typeId = no type; null $logo keeps the current logo. The channel itself never changes.
     public function update(User $admin, string $id, ?string $typeId, ?string $ip = null, ?UploadedFile $logo = null): void
     {
-        $this->withLogo($admin, $logo, function (?string $logoPath) use ($admin, $id, $typeId, $ip) {
+        $this->withLogo($admin, PermissionAction::Update, $logo, function (?string $logoPath) use ($admin, $id, $typeId, $ip) {
             $method = $this->locked($id);
             $typeId = $typeId === null ? null : $this->existingType($typeId);
             $old = $method->logo_path;
@@ -95,7 +96,7 @@ class ManagePaymentMethod
     // Back to the text badge in checkout.
     public function removeLogo(User $admin, string $id, ?string $ip = null): void
     {
-        $this->withLogo($admin, null, function () use ($admin, $id, $ip) {
+        $this->withLogo($admin, PermissionAction::Update, null, function () use ($admin, $id, $ip) {
             $method = $this->locked($id);
             $old = $method->logo_path;
 
@@ -112,7 +113,7 @@ class ManagePaymentMethod
 
     public function setActive(User $admin, string $id, bool $active, ?string $ip = null): void
     {
-        $this->change($admin, function () use ($admin, $id, $active, $ip) {
+        $this->change($admin, PermissionAction::Update, function () use ($admin, $id, $active, $ip) {
             $method = $this->locked($id);
 
             if ($method->is_active === $active) {
@@ -127,7 +128,7 @@ class ManagePaymentMethod
     // Swaps the order with the neighbour in the full list (checkout keeps this order within each channel kind).
     public function move(User $admin, string $id, bool $up, ?string $ip = null): void
     {
-        $this->change($admin, function () use ($admin, $id, $up, $ip) {
+        $this->change($admin, PermissionAction::Update, function () use ($admin, $id, $up, $ip) {
             $method = $this->locked($id);
             $all = PaymentMethod::query()->orderBy('sort')->orderBy('id')->lockForUpdate()->get();
 
@@ -142,7 +143,7 @@ class ManagePaymentMethod
     // Payments keep their own channel code, so history is unaffected.
     public function delete(User $admin, string $id, ?string $ip = null): void
     {
-        $this->withLogo($admin, null, function () use ($admin, $id, $ip) {
+        $this->withLogo($admin, PermissionAction::Delete, null, function () use ($admin, $id, $ip) {
             $method = $this->locked($id);
 
             $this->audit->log($admin, 'payment_method.delete', $method, ['channel' => $method->channel], null, $ip);
@@ -161,14 +162,14 @@ class ManagePaymentMethod
      * @param  Closure(?string): array{0: T, 1: ?string}  $change  returns [result, path of the logo it replaced]
      * @return T
      */
-    private function withLogo(User $admin, ?UploadedFile $logo, Closure $change): mixed
+    private function withLogo(User $admin, PermissionAction $action, ?UploadedFile $logo, Closure $change): mixed
     {
-        Gate::forUser($admin)->authorize(PermissionName::PaymentMethodsManage->value);
+        Gate::forUser($admin)->authorize(AdminResource::PaymentMethods->permission($action));
 
         $path = $logo === null ? null : $this->storeLogo($logo);
 
         try {
-            [$result, $replaced] = $this->change($admin, fn () => $change($path));
+            [$result, $replaced] = $this->change($admin, $action, fn () => $change($path));
         } catch (Throwable $e) {
             $this->deleteLogo($path);
 
@@ -218,9 +219,9 @@ class ManagePaymentMethod
      * @param  Closure(): T  $change
      * @return T
      */
-    private function change(User $admin, Closure $change): mixed
+    private function change(User $admin, PermissionAction $action, Closure $change): mixed
     {
-        Gate::forUser($admin)->authorize(PermissionName::PaymentMethodsManage->value);
+        Gate::forUser($admin)->authorize(AdminResource::PaymentMethods->permission($action));
 
         try {
             return DB::transaction($change);

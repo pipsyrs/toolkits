@@ -23,7 +23,7 @@ class Limits extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes;
 
-    public const PERMISSION = 'plans.manage';
+    public const PERMISSION = 'plans.view_any';
 
     /** @var array<string, array<string, mixed>> keyed by plan slug, then limit key */
     public array $values = [];

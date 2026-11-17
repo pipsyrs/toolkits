@@ -2,35 +2,40 @@
     use App\Services\Tier\Entitlements;
 
     $limits = $this->limits;
-    $maxMb = Entitlements::uploadLimit($limits, 'max_file_mb');
-    $maxFiles = Entitlements::uploadLimit($limits, 'max_files_per_op');
-    $accept = $this->accept ?: 'image/jpeg,image/png,image/webp';
-    $isGuest = $this->isGuest;
+    $formats = [
+        'webp' => ['WebP', 'Ukuran kecil'],
+        'jpg' => ['JPG', 'Paling kompatibel'],
+        'png' => ['PNG', 'Tanpa rugi, transparan'],
+    ];
 @endphp
 
-<div class="mx-auto max-w-3xl">
-    <header class="mb-6 flex items-center justify-between gap-3">
-        <div>
-            <p class="eyebrow">Gambar</p>
-            <h1 class="page-title">Konversi Gambar</h1>
-            <p class="mt-1 text-sm text-muted">Ubah format gambar ke JPG, PNG, atau WebP.</p>
+<x-tool-layout slug="image-convert" :steps="[
+    ['Unggah gambar', 'JPG, PNG, atau WebP, bisa beberapa sekaligus.'],
+    ['Pilih format', 'Pratinjau dan ukuran hasil muncul langsung.'],
+    ['Unduh', 'Beberapa file dikemas jadi satu ZIP.'],
+]">
+    <x-slot:meta><x-file-tool-meta :limits="$limits" /></x-slot:meta>
+
+    <x-file-dropzone :accept="$this->accept ?: 'image/jpeg,image/png,image/webp'" :max-files="Entitlements::uploadLimit($limits, 'max_files_per_op')" :max-mb="Entitlements::uploadLimit($limits, 'max_file_mb')" multiple />
+    <x-image-live-preview tool="convert" />
+
+    <x-slot:aside>
+        <div class="tool-panel">
+            <fieldset class="tool-panel-section">
+                <legend class="tool-panel-title mb-3">Konversi ke</legend>
+                <div class="grid gap-2">
+                    @foreach($formats as $val => [$label, $hint])
+                        <label class="option-tile justify-between">
+                            <input type="radio" wire:model="targetFormat" value="{{ $val }}" class="sr-only">
+                            <span class="font-medium">{{ $label }}</span>
+                            <span class="option-hint">{{ $hint }}</span>
+                        </label>
+                    @endforeach
+                </div>
+                @error('targetFormat') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
+
+            @include('livewire.tools._process', ['isGuest' => $this->isGuest])
         </div>
-    </header>
-
-    <div class="glass-strong space-y-5 p-6">
-        <x-file-dropzone :accept="$accept" :max-files="$maxFiles" :max-mb="$maxMb" multiple />
-
-        <div>
-            <label for="targetFormat" class="label">Konversi ke</label>
-            <select id="targetFormat" wire:model="targetFormat" class="input sm:max-w-xs">
-                <option value="webp">WebP (ukuran kecil)</option>
-                <option value="jpg">JPG</option>
-                <option value="png">PNG</option>
-            </select>
-        </div>
-
-        <x-image-live-preview tool="convert" />
-
-        @include('livewire.tools._process', ['isGuest' => $isGuest])
-    </div>
-</div>
+    </x-slot:aside>
+</x-tool-layout>

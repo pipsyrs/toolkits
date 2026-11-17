@@ -92,7 +92,7 @@
     </div>
 
     {{-- Detail & tanggapan --}}
-    @php($canManage = auth()->user()->can('reports.manage'))
+    @php($canManage = auth()->user()->can('reports.update'))
     <x-dashboard.modal wire:model="detailOpen" size="lg" :submit="$canManage && $selected ? 'save' : null" submit-label="Simpan tanggapan"
         :title="$selected?->subject ?? 'Laporan'"
         :description="$selected ? $selected->category->label().' · '.$wib($selected->created_at).' WIB' : null">

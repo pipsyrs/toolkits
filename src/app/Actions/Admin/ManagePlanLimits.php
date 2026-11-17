@@ -120,7 +120,7 @@ class ManagePlanLimits
      */
     public function create(User $admin, array $data, ?string $ip = null): Plan
     {
-        Gate::forUser($admin)->authorize('plans.manage');
+        Gate::forUser($admin)->authorize('create', Plan::class);
 
         $data['slug'] = is_string($data['slug'] ?? null) ? trim($data['slug']) : null;
         $data['name'] = is_string($data['name'] ?? null) ? trim($data['name']) : null;
@@ -171,7 +171,7 @@ class ManagePlanLimits
      */
     public function delete(User $admin, Plan $plan, ?string $ip = null): void
     {
-        Gate::forUser($admin)->authorize('update', $plan);
+        Gate::forUser($admin)->authorize('delete', $plan);
 
         if (Tier::isSystem($plan->slug)) {
             throw ValidationException::withMessages(['plan' => 'Paket Free tidak bisa dihapus.']);

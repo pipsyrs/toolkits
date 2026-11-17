@@ -3,8 +3,9 @@
 namespace App\Actions\Admin;
 
 use App\Actions\Admin\Concerns\SwapsSortOrder;
+use App\Enums\AdminResource;
 use App\Enums\PaymentChannelKind;
-use App\Enums\PermissionName;
+use App\Enums\PermissionAction;
 use App\Models\PaymentChannel;
 use App\Models\User;
 use App\Services\Admin\AuditLogger;
@@ -45,7 +46,7 @@ class ManagePaymentChannel
     {
         $data = $this->validated($input, true);
 
-        return $this->change($admin, function () use ($admin, $data, $ip) {
+        return $this->change($admin, PermissionAction::Create, function () use ($admin, $data, $ip) {
             if (PaymentChannel::query()->where('code', $data['code'])->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['code' => 'Kode channel sudah dipakai.']);
             }
@@ -67,7 +68,7 @@ class ManagePaymentChannel
      */
     public function update(User $admin, string $id, array $input, ?string $ip = null): void
     {
-        $this->change($admin, function () use ($admin, $id, $input, $ip) {
+        $this->change($admin, PermissionAction::Update, function () use ($admin, $id, $input, $ip) {
             $channel = $this->locked($id);
             $data = $this->validated($input + ['kind' => $channel->kind->value], false);
             $changes = [];
@@ -89,7 +90,7 @@ class ManagePaymentChannel
 
     public function move(User $admin, string $id, bool $up, ?string $ip = null): void
     {
-        $this->change($admin, function () use ($admin, $id, $up, $ip) {
+        $this->change($admin, PermissionAction::Update, function () use ($admin, $id, $up, $ip) {
             $channel = $this->locked($id);
             $all = PaymentChannel::query()->orderBy('sort')->orderBy('id')->lockForUpdate()->get();
 
@@ -102,7 +103,7 @@ class ManagePaymentChannel
     // Refused while a payment method offers the channel (the FK restricts it too). Payments keep the code as history.
     public function delete(User $admin, string $id, ?string $ip = null): void
     {
-        $this->change($admin, function () use ($admin, $id, $ip) {
+        $this->change($admin, PermissionAction::Delete, function () use ($admin, $id, $ip) {
             $channel = $this->locked($id);
 
             if ($channel->methods()->lockForUpdate()->exists()) {
@@ -172,9 +173,9 @@ class ManagePaymentChannel
      * @param  Closure(): T  $change
      * @return T
      */
-    private function change(User $admin, Closure $change): mixed
+    private function change(User $admin, PermissionAction $action, Closure $change): mixed
     {
-        Gate::forUser($admin)->authorize(PermissionName::PaymentMethodsManage->value);
+        Gate::forUser($admin)->authorize(AdminResource::PaymentChannels->permission($action));
 
         try {
             return DB::transaction($change);

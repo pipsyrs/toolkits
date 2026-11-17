@@ -2,61 +2,61 @@
     use App\Services\Tier\Entitlements;
 
     $limits = $this->limits;
-    $maxMb = Entitlements::uploadLimit($limits, 'max_file_mb');
-    $maxFiles = Entitlements::uploadLimit($limits, 'max_files_per_op');
-    $accept = $this->accept ?: 'image/jpeg,image/png,image/webp';
-    $isGuest = $this->isGuest;
 @endphp
 
-<div class="mx-auto max-w-3xl">
-    <header class="mb-6">
-        <p class="eyebrow">Gambar</p>
-        <h1 class="page-title">Ubah Ukuran Gambar</h1>
-        <p class="mt-1 text-sm text-muted">Perbesar atau perkecil gambar berdasarkan persen atau dimensi.</p>
-    </header>
+<x-tool-layout slug="image-resize" :steps="[
+    ['Unggah gambar', 'JPG, PNG, atau WebP, bisa beberapa sekaligus.'],
+    ['Atur ukuran', 'Pakai persen, atau isi lebar dan tinggi dalam piksel.'],
+    ['Unduh', 'Format asli dipertahankan.'],
+]">
+    <x-slot:meta><x-file-tool-meta :limits="$limits" /></x-slot:meta>
 
-    <div class="glass-strong space-y-5 p-6">
-        <x-file-dropzone :accept="$accept" :max-files="$maxFiles" :max-mb="$maxMb" multiple />
+    <x-file-dropzone :accept="$this->accept ?: 'image/jpeg,image/png,image/webp'" :max-files="Entitlements::uploadLimit($limits, 'max_files_per_op')" :max-mb="Entitlements::uploadLimit($limits, 'max_file_mb')" multiple />
+    <x-image-live-preview tool="resize" />
 
-        <fieldset>
-            <legend class="label">Metode</legend>
-            <div class="flex gap-2">
-                <label class="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-line-strong has-[:checked]:bg-sunken has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-fg">
-                    <input type="radio" wire:model.live="mode" value="percent" class="sr-only"> Persen
-                </label>
-                <label class="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-line-strong has-[:checked]:bg-sunken has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-fg">
-                    <input type="radio" wire:model.live="mode" value="dimension" class="sr-only"> Dimensi (px)
-                </label>
-            </div>
-        </fieldset>
-
-        @if(($mode ?? 'percent') === 'percent')
-            <div>
-                <label for="percent" class="label">Skala <span class="font-normal text-muted">(<span x-text="$wire.percent"></span>%)</span></label>
-                <input id="percent" type="range" min="1" max="100" step="1" wire:model="percent" class="w-full accent-tool-deep">
-                @error('percent') <p class="field-error">{{ $message }}</p> @enderror
-            </div>
-        @else
-            <div class="grid gap-4 sm:grid-cols-2">
-                <div>
-                    <label for="width" class="label">Lebar (px)</label>
-                    <input id="width" type="number" min="1" max="10000" wire:model="width" class="input" placeholder="1280">
-                    @error('width') <p class="field-error">{{ $message }}</p> @enderror
+    <x-slot:aside>
+        <div class="tool-panel">
+            <fieldset class="tool-panel-section">
+                <legend class="tool-panel-title mb-3">Metode</legend>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="option-tile justify-center">
+                        <input type="radio" wire:model.live="mode" value="percent" class="sr-only"> Persen
+                    </label>
+                    <label class="option-tile justify-center">
+                        <input type="radio" wire:model.live="mode" value="dimension" class="sr-only"> Dimensi (px)
+                    </label>
                 </div>
-                <div>
-                    <label for="height" class="label">Tinggi (px)</label>
-                    <input id="height" type="number" min="1" max="10000" wire:model="height" class="input" placeholder="720">
-                    @error('height') <p class="field-error">{{ $message }}</p> @enderror
-                </div>
+            </fieldset>
+
+            <div class="tool-panel-section">
+                @if($mode === 'percent')
+                    <label for="percent" class="tool-panel-title">
+                        <span>Skala</span>
+                        <span class="font-display text-base font-bold normal-case tracking-normal text-fg tabular-nums" x-text="`${$wire.percent}%`"></span>
+                    </label>
+                    <input id="percent" type="range" min="1" max="100" step="1" wire:model="percent" class="w-full accent-tool-deep">
+                    @error('percent') <p class="field-error">{{ $message }}</p> @enderror
+                @else
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="width" class="label">Lebar (px)</label>
+                            <input id="width" type="number" min="1" max="10000" wire:model="width" class="input" placeholder="1280">
+                            @error('width') <p class="field-error">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label for="height" class="label">Tinggi (px)</label>
+                            <input id="height" type="number" min="1" max="10000" wire:model="height" class="input" placeholder="720">
+                            @error('height') <p class="field-error">{{ $message }}</p> @enderror
+                        </div>
+                    </div>
+                    <label class="flex items-center gap-2 text-sm text-muted">
+                        <input type="checkbox" wire:model="keepAspect" class="rounded border-line text-ok focus:ring-fg">
+                        Pertahankan rasio aspek
+                    </label>
+                @endif
             </div>
-            <label class="flex items-center gap-2 text-sm text-muted">
-                <input type="checkbox" wire:model="keepAspect" class="rounded border-line text-ok focus:ring-fg">
-                Pertahankan rasio aspek
-            </label>
-        @endif
 
-        <x-image-live-preview tool="resize" />
-
-        @include('livewire.tools._process', ['isGuest' => $isGuest])
-    </div>
-</div>
+            @include('livewire.tools._process', ['isGuest' => $this->isGuest])
+        </div>
+    </x-slot:aside>
+</x-tool-layout>

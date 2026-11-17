@@ -21,7 +21,7 @@ class Index extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes, WithFormModal;
 
-    public const PERMISSION = 'payment_methods.manage';
+    public const PERMISSION = 'payment_channels.view_any';
 
     private const DEFAULT_COLOR = '#15181d';
 

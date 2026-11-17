@@ -18,8 +18,12 @@
 
     <div class="w-full max-w-md">
         <a href="{{ route('home') }}" class="mb-6 flex items-center justify-center gap-2 font-bold text-slate-900 dark:text-white">
-            <span class="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-sm text-white">Tk</span>
-            <span class="text-lg">Toolkits</span>
+            @if($logo = \App\Support\Branding::logoUrl())
+                <img src="{{ $logo }}" alt="{{ config('app.name') }}" height="40" class="h-10 w-auto max-w-48 object-contain">
+            @else
+                <span class="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-sm text-white">Tk</span>
+                <span class="text-lg">Toolkits</span>
+            @endif
         </a>
 
         <div class="card p-6 sm:p-8">

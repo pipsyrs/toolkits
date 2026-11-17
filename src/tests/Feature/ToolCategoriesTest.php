@@ -39,7 +39,7 @@ class ToolCategoriesTest extends TestCase
     {
         $this->actingAs(User::factory()->create())->get('/admin/tool-categories')->assertForbidden();
 
-        $viewer = User::factory()->create()->assignRole(Role::create(['name' => 'viewer', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'links.view']));
+        $viewer = User::factory()->create()->assignRole(Role::create(['name' => 'viewer', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'links.view_any']));
         $this->actingAs($viewer)->get('/admin/tool-categories')->assertForbidden();
         Livewire::actingAs($viewer)->test(Index::class)->assertForbidden();
 

@@ -22,7 +22,7 @@ class Index extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes, WithPagination;
 
-    public const PERMISSION = 'payments.view';
+    public const PERMISSION = 'payments.view_any';
 
     #[Url]
     public string $status = '';

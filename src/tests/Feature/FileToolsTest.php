@@ -18,7 +18,9 @@ use Database\Seeders\PlanSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -468,7 +470,7 @@ class FileToolsTest extends TestCase
         }
 
         Livewire::actingAs($user)->test(Tools\ImageConvert::class)
-            ->assertSee('Maks 100 file, 100 MB / file')
+            ->assertSeeInOrder(['Maks 100 file', '100 MB / file'])
             ->set('files', [UploadedFile::fake()->image('a.png', 10, 10)->size(3 * 1024)])
             ->call('process')
             ->assertHasNoErrors()
@@ -502,5 +504,93 @@ class FileToolsTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame([$user->id, null], [$operation->fresh()->user_id, $operation->fresh()->expires_at]);
+    }
+
+    /** @var list<array{int, int}> input sizes the fake model received */
+    private array $rembgInputs = [];
+
+    // Stand-in for rembg: transparent canvas of the input size with an opaque 20x10 block at (30, 40).
+    private function fakeRembg(): void
+    {
+        Process::fake(function (PendingProcess $process) {
+            [$in, $out] = array_slice($process->command, -2);
+            [$w, $h] = getimagesize($in);
+            $this->rembgInputs[] = [$w, $h];
+            $image = imagecreatetruecolor($w, $h);
+            imagealphablending($image, false);
+            imagefill($image, 0, 0, imagecolorallocatealpha($image, 0, 0, 0, 127));
+            imagefilledrectangle($image, 30, 40, 49, 49, imagecolorallocate($image, 200, 30, 30));
+            imagesavealpha($image, true);
+            imagepng($image, $out);
+
+            return Process::result();
+        });
+    }
+
+    private function resultSize(FileOperation $operation): array
+    {
+        return array_slice(getimagesize(Storage::disk('local')->path($operation->output_path)), 0, 3);
+    }
+
+    public function test_remove_bg_returns_transparent_png_with_pinned_model(): void
+    {
+        $this->fakeRembg();
+
+        Livewire::actingAs(User::factory()->create())->test(Tools\RemoveBackground::class)
+            ->set('files', [UploadedFile::fake()->image('Foto Produk.jpg', 120, 80)])
+            ->call('process')
+            ->assertHasNoErrors();
+
+        $operation = FileOperation::sole();
+        $this->assertSame(FileOperationStatus::Done, $operation->status);
+        $this->assertSame('foto-produk-tanpa-bg.png', $operation->output_name);
+        $this->assertSame([120, 80, IMAGETYPE_PNG], $this->resultSize($operation));
+        Process::assertRan(fn (PendingProcess $process) => array_slice($process->command, 1, 3) === ['i', '-m', 'isnet-general-use']);
+    }
+
+    public function test_remove_bg_crop_and_trim_are_locked_for_free_and_guest(): void
+    {
+        $this->fakeRembg();
+
+        // Guest first: actingAs stays signed in for the rest of the test.
+        foreach ([null, User::factory()->create()] as $user) {
+            foreach (['crop', 'trim'] as $option) {
+                ($user ? Livewire::actingAs($user) : Livewire::getFacadeRoot())->test(Tools\RemoveBackground::class)
+                    ->set('files', [UploadedFile::fake()->image('a.jpg', 120, 80)])
+                    ->set($option, true)
+                    ->call('process')
+                    ->assertHasErrors($option);
+            }
+        }
+
+        $this->assertSame(0, FileOperation::count());
+        Process::assertNothingRan();
+    }
+
+    public function test_remove_bg_pro_crops_before_and_trims_after_removal(): void
+    {
+        $this->fakeRembg();
+
+        Livewire::actingAs(User::factory()->pro()->create())->test(Tools\RemoveBackground::class)
+            ->set('files', [UploadedFile::fake()->image('a.png', 200, 100)])
+            ->set('crop', true)->set('cropX', 0.25)->set('cropY', 0)->set('cropW', 0.5)->set('cropH', 1)
+            ->set('trim', true)->set('padding', 4)
+            ->call('process')
+            ->assertHasNoErrors();
+
+        // Crop gives the model a 100x100 image; trim keeps the 20x10 block plus 4 px on each side.
+        $this->assertSame([[100, 100]], $this->rembgInputs);
+        $this->assertSame([28, 18, IMAGETYPE_PNG], $this->resultSize(FileOperation::sole()));
+    }
+
+    public function test_remove_bg_rejects_crop_outside_the_image(): void
+    {
+        Livewire::actingAs(User::factory()->pro()->create())->test(Tools\RemoveBackground::class)
+            ->set('files', [UploadedFile::fake()->image('a.jpg', 120, 80)])
+            ->set('crop', true)->set('cropX', 0.6)->set('cropY', 0)->set('cropW', 0.5)->set('cropH', 1)
+            ->call('process')
+            ->assertHasErrors('cropW');
+
+        $this->assertSame(0, FileOperation::count());
     }
 }

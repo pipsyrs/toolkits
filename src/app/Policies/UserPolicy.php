@@ -11,18 +11,18 @@ class UserPolicy
 
     public function block(User $admin, User $target): bool
     {
-        return $admin->can('users.block') && $this->outranks($admin, $target);
+        return $admin->can('users.update') && $this->outranks($admin, $target);
     }
 
     public function unblock(User $admin, User $target): bool
     {
-        return $admin->can('users.block') && $this->outranks($admin, $target);
+        return $admin->can('users.update') && $this->outranks($admin, $target);
     }
 
-    // Role changes per role are checked again in AssignUserRoles.
+    // Changes the user and grants roles, so both permissions; per role checked again in AssignUserRoles.
     public function assignRoles(User $admin, User $target): bool
     {
-        return $admin->can('users.roles')
+        return $admin->can('users.update') && $admin->can('roles.update')
             && $this->outranks($admin, $target, allowSuperadminTarget: true);
     }
 

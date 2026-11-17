@@ -176,7 +176,7 @@
             <div class="grid items-stretch gap-6 lg:grid-cols-2">
                 @if($revenue)
                     <x-dashboard.panel id="chart-revenue" title="Pendapatan per bulan" subtitle="Pembayaran lunas, 6 bulan terakhir." :delay="5"
-                        :href="auth()->user()->can('payments.view') ? route('admin.payments.index') : null" href-label="Transaksi">
+                        :href="auth()->user()->can('payments.view_any') ? route('admin.payments.index') : null" href-label="Transaksi">
                         <x-chart.columns :labels="$revenue['labels']" format="rupiah" label="Pendapatan per bulan"
                             :series="[['name' => 'Pendapatan', 'color' => 'var(--c-s1)', 'values' => $revenue['values']]]" />
                     </x-dashboard.panel>

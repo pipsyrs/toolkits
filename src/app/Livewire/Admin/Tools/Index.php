@@ -16,7 +16,7 @@ class Index extends Component
 {
     use AuthorizesAdmin;
 
-    public const PERMISSION = 'tools.manage';
+    public const PERMISSION = 'tools.view_any';
 
     public function render(ToolCatalog $catalog): View
     {

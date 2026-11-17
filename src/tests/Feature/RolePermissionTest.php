@@ -29,12 +29,12 @@ class RolePermissionTest extends TestCase
     use RefreshDatabase;
 
     private const ROUTES = [
-        '/admin/users' => 'users.view',
-        '/admin/links' => 'links.view',
-        '/admin/plans' => 'plans.manage',
-        '/admin/audit-logs' => 'audit.view',
-        '/admin/settings' => 'settings.manage',
-        '/admin/roles' => 'roles.manage',
+        '/admin/users' => 'users.view_any',
+        '/admin/links' => 'links.view_any',
+        '/admin/plans' => 'plans.view_any',
+        '/admin/audit-logs' => 'audit.view_any',
+        '/admin/settings' => 'settings.view_any',
+        '/admin/roles' => 'roles.view_any',
     ];
 
     protected function setUp(): void
@@ -62,7 +62,7 @@ class RolePermissionTest extends TestCase
 
     private function moderator(): User
     {
-        return $this->userWithRole('moderator', ['admin.access', 'links.view', 'links.moderate']);
+        return $this->userWithRole('moderator', ['admin.access', 'links.view_any', 'links.update']);
     }
 
     private function confirm(): void
@@ -102,7 +102,7 @@ class RolePermissionTest extends TestCase
             $allowed = $this->userWithRole('r-'.str_replace('.', '-', $permission), ['admin.access', $permission]);
             $this->actingAs($allowed)->withSession($session)->get($uri)->assertOk();
 
-            $other = $permission === 'users.view' ? 'links.view' : 'users.view';
+            $other = $permission === 'users.view_any' ? 'links.view_any' : 'users.view_any';
             $denied = $this->userWithRole('d-'.str_replace('.', '-', $permission), ['admin.access', $other]);
             $this->actingAs($denied)->withSession($session)->get($uri)->assertForbidden();
         }
@@ -110,7 +110,7 @@ class RolePermissionTest extends TestCase
 
     public function test_admin_access_is_required_even_with_feature_permission(): void
     {
-        $user = $this->userWithRole('no-admin', ['links.view']);
+        $user = $this->userWithRole('no-admin', ['links.view_any']);
 
         $this->actingAs($user)->get('/admin')->assertForbidden();
         $this->actingAs($user)->get('/admin/links')->assertForbidden();
@@ -162,7 +162,7 @@ class RolePermissionTest extends TestCase
         app(DisableLink::class)->handle($this->moderator(), $link, 'Phishing', null);
         $this->assertNotNull($link->fresh()->disabled_at);
 
-        $viewer = $this->userWithRole('link-viewer', ['admin.access', 'links.view']);
+        $viewer = $this->userWithRole('link-viewer', ['admin.access', 'links.view_any']);
         $this->expectException(AuthorizationException::class);
         app(DisableLink::class)->handle($viewer, Link::factory()->create(), 'Phishing', null);
     }
@@ -184,18 +184,18 @@ class RolePermissionTest extends TestCase
 
     public function test_cannot_create_role_with_permissions_actor_lacks(): void
     {
-        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage', 'links.view']);
+        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete', 'links.view_any']);
         $this->confirm();
 
         try {
-            app(SaveRole::class)->handle($manager, null, 'escalate', ['settings.manage'], null);
+            app(SaveRole::class)->handle($manager, null, 'escalate', ['settings.update'], null);
             $this->fail('escalation allowed');
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('permissions', $e->errors());
         }
 
-        $role = app(SaveRole::class)->handle($manager, null, 'viewer', ['links.view'], '127.0.0.1');
-        $this->assertEqualsCanonicalizing(['admin.access', 'links.view'], $role->permissions->pluck('name')->all());
+        $role = app(SaveRole::class)->handle($manager, null, 'viewer', ['links.view_any'], '127.0.0.1');
+        $this->assertEqualsCanonicalizing(['admin.access', 'links.view_any'], $role->permissions->pluck('name')->all());
         $this->assertDatabaseHas('admin_audit_logs', ['action' => 'role.created', 'subject_id' => $role->id]);
     }
 
@@ -240,16 +240,16 @@ class RolePermissionTest extends TestCase
 
     public function test_cannot_edit_own_role_or_role_with_more_permissions(): void
     {
-        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage']);
+        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete']);
         $bigger = Role::findOrCreate('bigger', 'web');
-        $bigger->syncPermissions(['admin.access', 'settings.manage']);
+        $bigger->syncPermissions(['admin.access', 'settings.update']);
         $this->confirm();
 
         $this->assertFalse($manager->can('update', Role::findByName('role-manager', 'web')));
         $this->assertFalse($manager->can('update', $bigger));
 
         $this->expectException(AuthorizationException::class);
-        app(SaveRole::class)->handle($manager, Role::findByName('role-manager', 'web'), 'role-manager', ['admin.access', 'roles.manage', 'users.view'], null);
+        app(SaveRole::class)->handle($manager, Role::findByName('role-manager', 'web'), 'role-manager', ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete', 'users.view_any'], null);
     }
 
     public function test_delete_role_in_use_is_rejected(): void
@@ -286,14 +286,14 @@ class RolePermissionTest extends TestCase
 
     public function test_livewire_role_form_creates_and_maps_errors(): void
     {
-        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage', 'links.view']);
+        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete', 'links.view_any']);
         $this->actingAs($manager);
         $this->confirm();
 
         Livewire::test(RolesIndex::class)
             ->call('openCreate')
             ->set('name', 'escalate')
-            ->set('selected', ['settings.manage'])
+            ->set('selected', ['settings.update'])
             ->call('save')
             ->assertHasErrors('selected')
             ->assertSet('formOpen', true);
@@ -301,13 +301,13 @@ class RolePermissionTest extends TestCase
         Livewire::test(RolesIndex::class)
             ->call('openCreate')
             ->set('name', 'link-viewer')
-            ->set('selected', ['links.view'])
+            ->set('selected', ['links.view_any'])
             ->call('save')
             ->assertHasNoErrors()
             ->assertSet('formOpen', false)
             ->assertNoRedirect();
 
-        $this->assertTrue(Role::findByName('link-viewer', 'web')->hasPermissionTo('links.view'));
+        $this->assertTrue(Role::findByName('link-viewer', 'web')->hasPermissionTo('links.view_any'));
 
         Livewire::test(RolesIndex::class)->assertViewHas('editable', fn ($e) => $e[Role::findByName('link-viewer', 'web')->id] === true
             && $e[Role::findByName('role-manager', 'web')->id] === false
@@ -337,11 +337,11 @@ class RolePermissionTest extends TestCase
 
     public function test_non_superadmin_cannot_grant_superadmin_or_bigger_role(): void
     {
-        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view', 'users.roles']);
+        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view_any', 'users.update', 'roles.update']);
         $target = User::factory()->create();
         $super = Role::findByName(User::SUPERADMIN_ROLE, 'web');
         $bigger = Role::findOrCreate('bigger', 'web');
-        $bigger->syncPermissions(['admin.access', 'settings.manage']);
+        $bigger->syncPermissions(['admin.access', 'settings.update']);
         $this->confirm();
 
         foreach ([$super, $bigger] as $role) {
@@ -358,7 +358,7 @@ class RolePermissionTest extends TestCase
 
     public function test_non_superadmin_cannot_change_superadmin_target(): void
     {
-        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view', 'users.roles']);
+        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view_any', 'users.update', 'roles.update']);
         $this->confirm();
 
         $this->expectException(AuthorizationException::class);
@@ -367,8 +367,8 @@ class RolePermissionTest extends TestCase
 
     public function test_cannot_change_admin_with_more_permissions(): void
     {
-        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view', 'users.roles', 'users.block']);
-        $bigger = $this->userWithRole('bigger', ['admin.access', 'settings.manage']);
+        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view_any', 'users.update', 'roles.update', 'users.update']);
+        $bigger = $this->userWithRole('bigger', ['admin.access', 'settings.update']);
         $this->confirm();
 
         $this->assertFalse($assigner->can('assignRoles', $bigger));
@@ -405,9 +405,9 @@ class RolePermissionTest extends TestCase
 
     public function test_assign_subset_role_via_livewire_with_audit(): void
     {
-        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view', 'users.roles', 'links.view']);
+        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view_any', 'users.update', 'roles.update', 'links.view_any']);
         $viewer = Role::findOrCreate('link-viewer', 'web');
-        $viewer->syncPermissions(['admin.access', 'links.view']);
+        $viewer->syncPermissions(['admin.access', 'links.view_any']);
         $target = User::factory()->create();
 
         $this->actingAs($assigner);
@@ -432,7 +432,7 @@ class RolePermissionTest extends TestCase
 
     public function test_assign_roles_without_permission_is_forbidden_in_livewire(): void
     {
-        $viewerOnly = $this->userWithRole('users-viewer', ['admin.access', 'users.view']);
+        $viewerOnly = $this->userWithRole('users-viewer', ['admin.access', 'users.view_any']);
         $target = User::factory()->create();
         $this->actingAs($viewerOnly);
         $this->confirm();

@@ -18,7 +18,7 @@ class Index extends Component
 {
     use AuthorizesAdmin, WithPagination;
 
-    public const PERMISSION = 'audit.view';
+    public const PERMISSION = 'audit.view_any';
 
     #[Url]
     public string $action = '';

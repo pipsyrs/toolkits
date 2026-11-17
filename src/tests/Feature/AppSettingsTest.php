@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Actions\Admin\UpdateAppSettings;
+use App\Actions\Admin\UpdateBrandAssets;
 use App\Livewire\Admin\Settings\Edit;
 use App\Models\AdminAuditLog;
 use App\Models\AppSetting;
@@ -14,10 +15,13 @@ use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -77,7 +81,7 @@ class AppSettingsTest extends TestCase
 
         $this->seed(PermissionSeeder::class);
 
-        $this->assertTrue(Permission::where('name', 'settings.manage')->exists());
+        $this->assertTrue(Permission::where('name', 'settings.update')->exists());
         $this->assertFalse(Permission::where('name', 'legacy.unknown')->exists());
     }
 
@@ -85,9 +89,9 @@ class AppSettingsTest extends TestCase
     {
         $admin = $this->superadmin();
 
-        $this->assertTrue(Gate::forUser($admin)->allows('settings.manage'));
+        $this->assertTrue(Gate::forUser($admin)->allows('settings.update'));
         $this->assertFalse(Gate::forUser($admin)->allows('not.in.catalog'));
-        $this->assertFalse(Gate::forUser(User::factory()->create())->allows('settings.manage'));
+        $this->assertFalse(Gate::forUser(User::factory()->create())->allows('settings.update'));
     }
 
     public function test_client_gets_403_on_page_and_livewire_replay(): void
@@ -338,5 +342,108 @@ class AppSettingsTest extends TestCase
         }
 
         $component->call('sendTestMail')->assertSee('Terlalu banyak percobaan');
+    }
+
+    public function test_logo_and_favicon_are_reencoded_stored_and_served(): void
+    {
+        Storage::fake('public');
+        $admin = $this->superadmin();
+        $this->actingAs($admin);
+        session($this->confirmed());
+
+        Livewire::test(Edit::class)
+            ->set('uploads.branding.logo', UploadedFile::fake()->image('logo.png', 1200, 300))
+            ->set('uploads.branding.favicon', UploadedFile::fake()->image('icon.jpg', 400, 400))
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('uploads', []);
+
+        $repo = $this->freshRepository();
+        $logo = $repo->get('branding.logo');
+        $favicon = $repo->get('branding.favicon');
+
+        $this->assertMatchesRegularExpression('#^branding/[0-9a-f-]{36}\.webp$#', $logo);
+        $this->assertMatchesRegularExpression('#^branding/[0-9a-f-]{36}\.png$#', $favicon);
+        $this->assertSame([512, 128], array_slice(getimagesize(Storage::disk('public')->path($logo)), 0, 2));
+        $this->assertSame([180, 180], array_slice(getimagesize(Storage::disk('public')->path($favicon)), 0, 2));
+        $this->assertSame(['old' => null, 'new' => $logo], AdminAuditLog::where('action', 'settings.updated')->latest('id')->first()->changes['branding.logo']);
+
+        $repo->applyToConfig();
+        $this->get(route('home'))->assertSee(Storage::disk('public')->url($logo))->assertSee(Storage::disk('public')->url($favicon));
+    }
+
+    public function test_invalid_upload_blocks_the_whole_save(): void
+    {
+        Storage::fake('public');
+        $admin = $this->superadmin();
+        $this->actingAs($admin);
+        session($this->confirmed());
+
+        Livewire::test(Edit::class)
+            ->set('values.general.site_name', 'Tidak tersimpan')
+            ->set('uploads.branding.logo', UploadedFile::fake()->createWithContent('logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'))
+            ->call('save')
+            ->assertHasErrors(['branding.logo']);
+
+        $this->assertSame(0, AppSetting::count());
+        $this->assertSame([], Storage::disk('public')->allFiles());
+
+        // A disguised file passes the MIME check in tests but fails re-encoding: still a field error, nothing stored.
+        try {
+            app(UpdateBrandAssets::class)->handle($admin, ['branding.favicon' => UploadedFile::fake()->createWithContent('icon.png', 'bukan gambar')], []);
+            $this->fail('disguised file must be rejected');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('branding.favicon', $e->errors());
+        }
+
+        $this->assertSame(0, AppSetting::count());
+        $this->assertSame([], Storage::disk('public')->allFiles());
+    }
+
+    public function test_replacing_and_clearing_brand_images_removes_old_files(): void
+    {
+        Storage::fake('public');
+        $admin = $this->superadmin();
+        $this->actingAs($admin);
+        session($this->confirmed());
+        $action = app(UpdateBrandAssets::class);
+
+        $action->handle($admin, ['branding.logo' => UploadedFile::fake()->image('a.png', 50, 20)], []);
+        $first = $this->freshRepository()->get('branding.logo');
+
+        $action->handle($admin, ['branding.logo' => UploadedFile::fake()->image('b.png', 50, 20)], []);
+        $second = $this->freshRepository()->get('branding.logo');
+
+        $this->assertNotSame($first, $second);
+        Storage::disk('public')->assertMissing($first);
+        Storage::disk('public')->assertExists($second);
+
+        Livewire::test(Edit::class)
+            ->set('clear.branding.logo', true)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertNull($this->freshRepository()->get('branding.logo'));
+        Storage::disk('public')->assertMissing($second);
+        $this->assertSame([], $action->handle($admin, [], ['branding.logo']), 'removing nothing is a no-op');
+    }
+
+    public function test_brand_action_rejects_actor_without_permission_or_raw_paths(): void
+    {
+        Storage::fake('public');
+        session($this->confirmed());
+
+        try {
+            app(UpdateBrandAssets::class)->handle(User::factory()->create(), ['branding.logo' => UploadedFile::fake()->image('a.png')], []);
+            $this->fail('client must not update branding');
+        } catch (AuthorizationException) {
+        }
+
+        // A path string is never accepted as a value, by either action.
+        $admin = $this->superadmin();
+        $this->update($admin, ['branding' => ['logo' => '../../.env']]);
+        $this->assertSame([], app(UpdateBrandAssets::class)->handle($admin, ['branding.logo' => '../../.env'], []));
+        $this->assertSame(0, AppSetting::count());
+        $this->assertSame([], Storage::disk('public')->allFiles());
     }
 }

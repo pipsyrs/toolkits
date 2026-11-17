@@ -2,7 +2,7 @@
 
 namespace App\Services\Authorization;
 
-use App\Enums\PermissionName;
+use App\Enums\AdminResource;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -17,12 +17,12 @@ class PermissionSet
     public function for(User $user): Collection
     {
         if ($user->isSuperadmin()) {
-            return collect(PermissionName::values());
+            return collect(AdminResource::permissions());
         }
 
         return $user->getAllPermissions()
             ->pluck('name')
-            ->intersect(PermissionName::values())
+            ->intersect(AdminResource::permissions())
             ->unique()
             ->values();
     }
@@ -33,7 +33,7 @@ class PermissionSet
     public function forRole(Role $role): Collection
     {
         if ($role->name === User::SUPERADMIN_ROLE) {
-            return collect(PermissionName::values());
+            return collect(AdminResource::permissions());
         }
 
         return $role->permissions->pluck('name')->values();

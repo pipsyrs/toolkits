@@ -239,7 +239,7 @@ class AppSettingsQaTest extends TestCase
 
         // F2: menu is per permission; auditor sees audit log, not settings.
         $client = User::factory()->create();
-        $client->assignRole(Role::findOrCreate('auditor', 'web')->givePermissionTo(['admin.access', 'audit.view']));
+        $client->assignRole(Role::findOrCreate('auditor', 'web')->givePermissionTo(['admin.access', 'audit.view_any']));
         $this->actingAs($client);
         $html = Blade::render('<x-layouts::admin>isi</x-layouts::admin>');
 

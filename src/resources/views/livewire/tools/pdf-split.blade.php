@@ -2,52 +2,53 @@
     use App\Services\Tier\Entitlements;
 
     $limits = $this->limits;
-    $maxMb = Entitlements::uploadLimit($limits, 'max_file_mb');
-    $accept = $this->accept ?: 'application/pdf';
-    $isGuest = $this->isGuest;
 @endphp
 
-<div class="mx-auto max-w-3xl">
-    <header class="mb-6">
-        <p class="eyebrow">PDF</p>
-        <h1 class="page-title">Pisah PDF</h1>
-        <p class="mt-1 text-sm text-muted">Ambil halaman tertentu atau pecah setiap halaman jadi file terpisah.</p>
-    </header>
+<x-tool-layout slug="pdf-split" :steps="[
+    ['Unggah PDF', 'Satu file PDF per proses.'],
+    ['Pilih halaman', 'Klik halaman atau ketik rentangnya, mis. 1-3,5.'],
+    ['Unduh', 'Satu PDF berisi halaman pilihan, atau ZIP per halaman.'],
+]">
+    <x-slot:meta><x-file-tool-meta :limits="$limits" /></x-slot:meta>
 
-    <div class="glass-strong space-y-5 p-6">
-        <x-file-dropzone :accept="$accept" :max-files="1" :max-mb="$maxMb" />
+    <x-file-dropzone :accept="$this->accept ?: 'application/pdf'" :max-files="1" :max-mb="Entitlements::uploadLimit($limits, 'max_file_mb')" />
 
-        <fieldset>
-            <legend class="label">Mode</legend>
-            <div class="flex flex-col gap-2 sm:flex-row">
-                <label class="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-sm has-[:checked]:border-line-strong has-[:checked]:bg-sunken">
-                    <input type="radio" wire:model.live="mode" value="extract" class="text-ok focus:ring-fg">
-                    Ambil rentang halaman
-                </label>
-                <label class="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-sm has-[:checked]:border-line-strong has-[:checked]:bg-sunken">
-                    <input type="radio" wire:model.live="mode" value="each" class="text-ok focus:ring-fg">
-                    Pecah tiap halaman
-                </label>
-            </div>
-        </fieldset>
+    <x-preview-panel title="Pilih halaman" x-data="pdfSplit" x-on:files-changed.window="setFiles($event.detail.files)"
+        x-show="loading || error || pages.length">
+        <p x-show="total" class="text-sm text-muted" aria-live="polite" x-text="summary()"></p>
+        <p x-show="extract && selection.outside" class="field-error" x-text="`Ada nomor halaman di luar 1–${total}; halaman itu akan membuat proses gagal.`"></p>
+        <x-pdf-pages label="Halaman PDF" />
+    </x-preview-panel>
 
-        @if(($mode ?? 'extract') === 'extract')
-            <div>
-                <label for="ranges" class="label">Rentang halaman</label>
-                <input id="ranges" type="text" wire:model="ranges" placeholder="1-3,5,8-10"
-                    class="input @error('ranges') border-danger @enderror" inputmode="numeric">
-                <p class="mt-1.5 text-xs text-muted">Pisahkan dengan koma. Contoh: <code>1-3,5,8-10</code></p>
-                @error('ranges') <p class="field-error">{{ $message }}</p> @enderror
-            </div>
-        @endif
+    <x-slot:aside>
+        <div class="tool-panel">
+            <fieldset class="tool-panel-section">
+                <legend class="tool-panel-title mb-3">Mode</legend>
+                <div class="grid gap-2">
+                    <label class="option-tile justify-between">
+                        <input type="radio" wire:model.live="mode" value="extract" class="sr-only">
+                        <span class="font-medium">Ambil rentang</span>
+                        <span class="option-hint">1 PDF berisi pilihanmu</span>
+                    </label>
+                    <label class="option-tile justify-between">
+                        <input type="radio" wire:model.live="mode" value="each" class="sr-only">
+                        <span class="font-medium">Pecah tiap halaman</span>
+                        <span class="option-hint">ZIP, 1 file per halaman</span>
+                    </label>
+                </div>
+            </fieldset>
 
-        <x-preview-panel title="Pilih halaman" x-data="pdfSplit" x-on:files-changed.window="setFiles($event.detail.files)"
-            x-show="loading || error || pages.length">
-            <p x-show="total" class="text-sm text-muted" aria-live="polite" x-text="summary()"></p>
-            <p x-show="extract && selection.outside" class="field-error" x-text="`Ada nomor halaman di luar 1–${total}; halaman itu akan membuat proses gagal.`"></p>
-            <x-pdf-pages label="Halaman PDF" />
-        </x-preview-panel>
+            @if($mode === 'extract')
+                <div class="tool-panel-section">
+                    <label for="ranges" class="tool-panel-title">Rentang halaman</label>
+                    <input id="ranges" type="text" wire:model="ranges" placeholder="1-3,5,8-10"
+                        class="input font-mono @error('ranges') border-danger @enderror" inputmode="numeric">
+                    <p class="text-xs text-muted">Pisahkan dengan koma. Contoh: <code>1-3,5,8-10</code></p>
+                    @error('ranges') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+            @endif
 
-        @include('livewire.tools._process', ['isGuest' => $isGuest])
-    </div>
-</div>
+            @include('livewire.tools._process', ['isGuest' => $this->isGuest])
+        </div>
+    </x-slot:aside>
+</x-tool-layout>

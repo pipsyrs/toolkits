@@ -3,7 +3,8 @@
 namespace App\Actions\Admin;
 
 use App\Actions\Admin\Concerns\SwapsSortOrder;
-use App\Enums\PermissionName;
+use App\Enums\AdminResource;
+use App\Enums\PermissionAction;
 use App\Models\ToolCategory;
 use App\Models\User;
 use App\Services\Admin\AuditLogger;
@@ -33,7 +34,7 @@ class ManageToolCategory
             'name' => $this->nameRules(),
         ], ['slug.regex' => 'Slug hanya huruf kecil, angka, dan tanda -.'], ['slug' => 'slug', 'name' => 'nama'])->validate();
 
-        return $this->change($admin, function () use ($admin, $data, $ip) {
+        return $this->change($admin, PermissionAction::Create, function () use ($admin, $data, $ip) {
             if (ToolCategory::query()->where('slug', $data['slug'])->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['slug' => 'Slug kategori sudah dipakai.']);
             }
@@ -56,7 +57,7 @@ class ManageToolCategory
 
         Validator::make(['name' => $name], ['name' => $this->nameRules()], [], ['name' => 'nama'])->validate();
 
-        $this->change($admin, function () use ($admin, $id, $name, $ip) {
+        $this->change($admin, PermissionAction::Update, function () use ($admin, $id, $name, $ip) {
             $category = $this->locked($id);
 
             if ($category->name === $name) {
@@ -70,7 +71,7 @@ class ManageToolCategory
 
     public function move(User $admin, string $id, bool $up, ?string $ip = null): void
     {
-        $this->change($admin, function () use ($admin, $id, $up, $ip) {
+        $this->change($admin, PermissionAction::Update, function () use ($admin, $id, $up, $ip) {
             $category = $this->locked($id);
             $all = ToolCategory::query()->orderBy('sort')->orderBy('id')->lockForUpdate()->get();
 
@@ -83,7 +84,7 @@ class ManageToolCategory
     // Refused while any tool (config default or override) is in the category.
     public function delete(User $admin, string $id, ?string $ip = null): void
     {
-        $this->change($admin, function () use ($admin, $id, $ip) {
+        $this->change($admin, PermissionAction::Delete, function () use ($admin, $id, $ip) {
             $category = $this->locked($id);
             // Fresh read after the lock: an assignment that just committed may still be cached as absent.
             $this->catalog->forget();
@@ -117,9 +118,9 @@ class ManageToolCategory
      * @param  Closure(): T  $change
      * @return T
      */
-    private function change(User $admin, Closure $change): mixed
+    private function change(User $admin, PermissionAction $action, Closure $change): mixed
     {
-        Gate::forUser($admin)->authorize(PermissionName::ToolsManage->value);
+        Gate::forUser($admin)->authorize(AdminResource::ToolCategories->permission($action));
 
         try {
             return DB::transaction($change);

@@ -4,6 +4,8 @@ namespace App\Services\Files;
 
 use App\Exceptions\FileProcessingException;
 use GdImage;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 
 // GD based image operations; every method writes $out and never touches $src.
 class ImageProcessor
@@ -19,6 +21,17 @@ class ImageProcessor
     private const PREVIEW_QUALITY = 60;
 
     private const WATERMARK = 'PRATINJAU';
+
+    // GD alpha: 0 opaque … 127 transparent. Softer edge pixels than this count as background.
+    private const SUBJECT_ALPHA = 120;
+
+    // Subject bounds are searched on a downscaled copy; full-size pixel scans in PHP are too slow.
+    private const TRIM_SCAN_SIDE = 1024;
+
+    private const CHECKER_CELL = 12;
+
+    // Pinned: rembg's default model (bria-rmbg) is non-commercial and ~1 GB. ISNet is Apache-2.0, ~170 MB.
+    private const REMBG_MODEL = 'isnet-general-use';
 
     public function convert(string $src, string $out, string $format): void
     {
@@ -65,6 +78,41 @@ class ImageProcessor
     }
 
     /**
+     * Transparent PNG of the subject. Crop (relative 0–1 box) runs before the model, trim after it.
+     *
+     * @param  array{crop?: bool, cropX?: float, cropY?: float, cropW?: float, cropH?: float, trim?: bool, padding?: int}  $options
+     */
+    public function removeBackground(string $src, string $out, array $options): void
+    {
+        $image = $this->load($src);
+
+        if ($options['crop'] ?? false) {
+            $image = $this->cropRelative($image, (float) $options['cropX'], (float) $options['cropY'], (float) $options['cropW'], (float) $options['cropH']);
+        }
+
+        // Re-encoded PNG input: orientation applied, nothing from the upload reaches the model untouched.
+        $input = $out.'.input.png';
+        $this->savePng($image, $input);
+
+        try {
+            $result = Process::timeout((int) config('toolkits.files.process_timeout'))
+                ->run([config('toolkits.files.rembg'), 'i', '-m', self::REMBG_MODEL, $input, $out]);
+        } finally {
+            File::delete($input);
+        }
+
+        if ($result->failed() || ! is_file($out)) {
+            File::delete($out);
+
+            throw new FileProcessingException('Background gagal dihapus. Coba gambar lain.');
+        }
+
+        if ($options['trim'] ?? false) {
+            $this->savePng($this->trimToSubject($this->load($out), (int) ($options['padding'] ?? 0)), $out);
+        }
+    }
+
+    /**
      * JPEG bytes plus pixel size, for embedding in a PDF.
      *
      * @return array{data: string, width: int, height: int}
@@ -87,8 +135,9 @@ class ImageProcessor
         $scale = min(1, $maxSide / max($w, $h));
         [$newW, $newH] = [max(1, (int) round($w * $scale)), max(1, (int) round($h * $scale))];
 
-        $thumb = imagecreatetruecolor($newW, $newH);
-        imagefill($thumb, 0, 0, imagecolorallocate($thumb, 255, 255, 255));
+        // Checkerboard under the image, so transparent results stay recognisable in a JPEG preview.
+        $thumb = $this->checkerboard($newW, $newH);
+        imagealphablending($thumb, true);
         imagecopyresampled($thumb, $image, 0, 0, 0, 0, $newW, $newH, $w, $h);
         $this->watermark($thumb);
 
@@ -97,8 +146,8 @@ class ImageProcessor
         }
     }
 
-    // Re-encoded WebP that fits $maxSide, keeping transparency; re-encoding drops anything hidden in the upload.
-    public function logo(string $src, string $out, int $maxSide): void
+    // Re-encoded image ($format: webp|png) that fits $maxSide, keeping transparency; re-encoding drops anything hidden in the upload.
+    public function logo(string $src, string $out, int $maxSide, string $format = 'webp'): void
     {
         $image = $this->load($src);
         [$w, $h] = [imagesx($image), imagesy($image)];
@@ -106,7 +155,7 @@ class ImageProcessor
         $logo = $this->transparentCanvas(max(1, (int) round($w * $scale)), max(1, (int) round($h * $scale)));
         imagecopyresampled($logo, $image, 0, 0, 0, 0, imagesx($logo), imagesy($logo), $w, $h);
 
-        $this->save($logo, $out, 'webp', self::DEFAULT_QUALITY);
+        $this->save($logo, $out, $format, self::DEFAULT_QUALITY);
     }
 
     public function formatOf(string $path): string
@@ -192,6 +241,82 @@ class ImageProcessor
                 imagecopy($image, $big, $x, $y, 0, 0, imagesx($big), imagesy($big));
             }
         }
+    }
+
+    private function cropRelative(GdImage $image, float $x, float $y, float $w, float $h): GdImage
+    {
+        [$width, $height] = [imagesx($image), imagesy($image)];
+        $left = (int) floor(max(0, min(1, $x)) * $width);
+        $top = (int) floor(max(0, min(1, $y)) * $height);
+        $rect = [
+            'x' => $left,
+            'y' => $top,
+            'width' => max(1, min($width - $left, (int) round($w * $width))),
+            'height' => max(1, min($height - $top, (int) round($h * $height))),
+        ];
+
+        $cropped = imagecrop($image, $rect);
+
+        if (! $cropped instanceof GdImage) {
+            throw new FileProcessingException('Area crop tidak valid.');
+        }
+
+        return $cropped;
+    }
+
+    // Tight box around non-transparent pixels plus $padding px of transparent margin.
+    private function trimToSubject(GdImage $image, int $padding): GdImage
+    {
+        [$w, $h] = [imagesx($image), imagesy($image)];
+        $scale = min(1, self::TRIM_SCAN_SIDE / max($w, $h));
+        $scan = $this->transparentCanvas(max(1, (int) round($w * $scale)), max(1, (int) round($h * $scale)));
+        imagecopyresampled($scan, $image, 0, 0, 0, 0, imagesx($scan), imagesy($scan), $w, $h);
+
+        [$minX, $minY, $maxX, $maxY] = [PHP_INT_MAX, PHP_INT_MAX, -1, -1];
+
+        for ($y = 0, $sh = imagesy($scan), $sw = imagesx($scan); $y < $sh; $y++) {
+            for ($x = 0; $x < $sw; $x++) {
+                if (((imagecolorat($scan, $x, $y) >> 24) & 0x7F) <= self::SUBJECT_ALPHA) {
+                    $minX = min($minX, $x);
+                    $maxX = max($maxX, $x);
+                    $minY = min($minY, $y);
+                    $maxY = max($maxY, $y);
+                }
+            }
+        }
+
+        if ($maxX < 0) {
+            throw new FileProcessingException('Objek tidak ditemukan di gambar.');
+        }
+
+        // One scan pixel of slack on each side covers the downscale rounding.
+        $slack = $scale < 1 ? 1 : 0;
+        $left = max(0, (int) floor(($minX - $slack) / $scale));
+        $top = max(0, (int) floor(($minY - $slack) / $scale));
+        $right = min($w, (int) ceil(($maxX + 1 + $slack) / $scale));
+        $bottom = min($h, (int) ceil(($maxY + 1 + $slack) / $scale));
+        [$boxW, $boxH] = [$right - $left, $bottom - $top];
+
+        $canvas = $this->transparentCanvas($boxW + 2 * $padding, $boxH + 2 * $padding);
+        imagecopy($canvas, $image, $padding, $padding, $left, $top, $boxW, $boxH);
+
+        return $canvas;
+    }
+
+    private function checkerboard(int $w, int $h): GdImage
+    {
+        $board = imagecreatetruecolor($w, $h);
+        $light = imagecolorallocate($board, 255, 255, 255);
+        $dark = imagecolorallocate($board, 226, 228, 232);
+        imagefill($board, 0, 0, $light);
+
+        for ($y = 0; $y < $h; $y += self::CHECKER_CELL) {
+            for ($x = ($y / self::CHECKER_CELL) % 2 * self::CHECKER_CELL; $x < $w; $x += 2 * self::CHECKER_CELL) {
+                imagefilledrectangle($board, $x, $y, $x + self::CHECKER_CELL - 1, $y + self::CHECKER_CELL - 1, $dark);
+            }
+        }
+
+        return $board;
     }
 
     private function transparentCanvas(int $w, int $h): GdImage

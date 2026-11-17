@@ -1039,10 +1039,10 @@ class BillingTest extends TestCase
 
         $this->actingAs(User::factory()->create())->get('/admin/payments')->assertForbidden();
 
-        $auditor = User::factory()->create()->assignRole(Role::create(['name' => 'auditor', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'audit.view']));
+        $auditor = User::factory()->create()->assignRole(Role::create(['name' => 'auditor', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'audit.view_any']));
         $this->actingAs($auditor)->get('/admin/payments')->assertForbidden();
 
-        $finance = User::factory()->create()->assignRole(Role::create(['name' => 'finance', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'payments.view']));
+        $finance = User::factory()->create()->assignRole(Role::create(['name' => 'finance', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'payments.view_any']));
         $this->actingAs($finance)->get('/admin/payments')->assertOk()->assertSee($payment->order_id);
 
         $this->actingAs(User::factory()->create()->assignRole('superadmin'))->get('/admin/payments')->assertOk();

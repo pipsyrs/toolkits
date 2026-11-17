@@ -364,6 +364,49 @@
         @apply bg-tool text-ink;
     }
 
+    /* ===== Halaman alat: panggung kerja + panel pengaturan ===== */
+
+    /* Panggung: titik pegboard tipis, tempat file dan pratinjau */
+    .tool-stage {
+        @apply rounded-xl border border-line p-4 sm:p-6;
+        background:
+            radial-gradient(var(--c-peg) 1.1px, transparent 1.5px) 0 0 / 18px 18px,
+            var(--c-surface);
+    }
+    /* Panel pengaturan: padat, dibagi per bagian */
+    .tool-panel {
+        @apply rounded-xl border border-line bg-surface;
+    }
+    .tool-panel-section {
+        @apply space-y-3 border-b border-line p-5 last:border-0;
+    }
+    .tool-panel-title {
+        @apply flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wider text-muted;
+    }
+    /* Pilihan berbentuk ubin: radio/checkbox tersembunyi, fokus keyboard ikut ubin */
+    .option-tile {
+        @apply relative flex cursor-pointer items-center gap-2 rounded-md border border-line bg-surface px-3 py-2.5 text-sm
+            text-fg transition-colors hover:border-line-strong has-[:checked]:border-line-strong has-[:checked]:bg-sunken
+            has-[:checked]:shadow-[inset_0_-2px_0_var(--color-tool)] has-[:focus-visible]:outline-2
+            has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-fg has-[:disabled]:cursor-not-allowed
+            has-[:disabled]:opacity-50 has-[:disabled]:hover:border-line;
+    }
+    /* Legend mengalir seperti teks biasa di dalam padding, bukan menempel di garis tepi fieldset */
+    :is(.tool-stage, .tool-panel) fieldset > legend {
+        float: left;
+        width: 100%;
+    }
+    :is(.tool-stage, .tool-panel) fieldset > legend + * {
+        clear: both;
+    }
+    .option-hint {
+        @apply block text-xs font-normal text-muted;
+    }
+    /* Latar kotak-kotak untuk gambar transparan */
+    .checker {
+        background: repeating-conic-gradient(var(--c-sunken) 0% 25%, var(--c-surface) 0% 50%) 0 0 / 16px 16px;
+    }
+
     /* Masuk bertahap untuk isi halaman */
     .stagger > * {
         animation: var(--animate-rise);

@@ -89,19 +89,19 @@ class SupportReportsTest extends TestCase
     {
         $this->actingAs(User::factory()->create())->get('/admin/reports')->assertForbidden();
 
-        $other = User::factory()->create()->assignRole($this->role('finance', ['admin.access', 'payments.view']));
+        $other = User::factory()->create()->assignRole($this->role('finance', ['admin.access', 'payments.view_any']));
         $this->actingAs($other)->get('/admin/reports')->assertForbidden();
         Livewire::actingAs($other)->test(AdminReports::class)->assertForbidden();
 
         $this->report(User::factory()->create());
-        $viewer = User::factory()->create()->assignRole($this->role('cs-viewer', ['admin.access', 'reports.view']));
+        $viewer = User::factory()->create()->assignRole($this->role('cs-viewer', ['admin.access', 'reports.view_any', 'reports.view']));
         $this->actingAs($viewer)->get('/admin/reports')->assertOk()->assertSee('QRIS tidak terbaca');
     }
 
     public function test_viewer_without_manage_cannot_reply(): void
     {
         $report = $this->report(User::factory()->create());
-        $viewer = User::factory()->create()->assignRole($this->role('cs-viewer', ['admin.access', 'reports.view']));
+        $viewer = User::factory()->create()->assignRole($this->role('cs-viewer', ['admin.access', 'reports.view_any', 'reports.view']));
 
         Livewire::actingAs($viewer)->test(AdminReports::class)
             ->call('open', $report->id)
@@ -117,7 +117,7 @@ class SupportReportsTest extends TestCase
     {
         $user = User::factory()->create();
         $report = $this->report($user);
-        $agent = User::factory()->create()->assignRole($this->role('cs', ['admin.access', 'reports.view', 'reports.manage']));
+        $agent = User::factory()->create()->assignRole($this->role('cs', ['admin.access', 'reports.view_any', 'reports.view', 'reports.update']));
 
         Livewire::actingAs($agent)->test(AdminReports::class)
             ->call('open', $report->id)
@@ -161,7 +161,7 @@ class SupportReportsTest extends TestCase
 
     public function test_sidebar_groups_follow_permissions(): void
     {
-        $agent = User::factory()->create()->assignRole($this->role('cs', ['admin.access', 'reports.view']));
+        $agent = User::factory()->create()->assignRole($this->role('cs', ['admin.access', 'reports.view_any', 'reports.view']));
 
         $this->actingAs($agent)->get('/admin/reports')->assertOk()
             ->assertSee('Customer service')

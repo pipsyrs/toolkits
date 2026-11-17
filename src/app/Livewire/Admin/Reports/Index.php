@@ -25,7 +25,7 @@ class Index extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes, WithPagination;
 
-    public const PERMISSION = 'reports.view';
+    public const PERMISSION = 'reports.view_any';
 
     private const CURSOR = 'cursor';
 
@@ -67,6 +67,8 @@ class Index extends Component
 
     public function open(string $id): void
     {
+        $this->authorize('reports.view');
+
         $report = Str::isUuid($id) ? SupportReport::query()->find($id, ['id', 'status', 'admin_reply']) : null;
 
         if ($report === null) {

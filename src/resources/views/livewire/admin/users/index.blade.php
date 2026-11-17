@@ -41,7 +41,7 @@
                         <tbody class="divide-y divide-line">
                             @php
                                 $actor = auth()->user();
-                                $canBlock = $actor?->can('users.block') ?? false;
+                                $canBlock = $actor?->can('users.update') ?? false;
                             @endphp
                             @foreach($users as $user)
                                 @php

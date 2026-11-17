@@ -43,11 +43,11 @@ class PaymentMethodsTest extends TestCase
     {
         $this->actingAs(User::factory()->create())->get('/admin/payment-methods')->assertForbidden();
 
-        $finance = User::factory()->create()->assignRole(Role::create(['name' => 'finance', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'payments.view']));
+        $finance = User::factory()->create()->assignRole(Role::create(['name' => 'finance', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'payments.view_any']));
         $this->actingAs($finance)->get('/admin/payment-methods')->assertForbidden();
         Livewire::actingAs($finance)->test(Index::class)->assertForbidden();
 
-        $manager = User::factory()->create()->assignRole(Role::create(['name' => 'billing', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'payment_methods.manage']));
+        $manager = User::factory()->create()->assignRole(Role::create(['name' => 'billing', 'guard_name' => 'web'])->givePermissionTo(['admin.access', 'payment_methods.view_any']));
         $this->actingAs($manager)->get('/admin/payment-methods')->assertOk()->assertSee('BCA Virtual Account')->assertSee('OVO');
         $this->actingAs($this->admin())->get('/admin/payment-methods')->assertOk();
     }

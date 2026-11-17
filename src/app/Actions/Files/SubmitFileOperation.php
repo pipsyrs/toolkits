@@ -28,7 +28,7 @@ class SubmitFileOperation
     // Tools that work on a fixed number of files.
     private const MIN_FILES = ['pdf-merge' => 2];
 
-    private const MAX_FILES = ['pdf-split' => 1];
+    private const MAX_FILES = ['pdf-split' => 1, 'remove-bg' => 1];
 
     private const EXTENSIONS = [
         'image/jpeg' => 'jpg',

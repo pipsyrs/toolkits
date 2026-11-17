@@ -9,7 +9,7 @@ class PaymentPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->can('payments.view');
+        return $user->can('payments.view_any');
     }
 
     // Owner only (also for superadmin: no Gate::before on non-catalog abilities).

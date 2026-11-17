@@ -27,7 +27,7 @@ class Index extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes, WithPagination;
 
-    public const PERMISSION = 'users.view';
+    public const PERMISSION = 'users.view_any';
 
     public const STATUSES = ['all', 'active', 'blocked', 'unverified'];
 
@@ -119,7 +119,7 @@ class Index extends Component
             ->paginate(25, ['id', 'name', 'email', 'email_verified_at', 'blocked_at', 'blocked_reason', 'plan', 'plan_until', 'two_factor_confirmed_at', 'created_at']);
 
         $actor = $this->adminUser();
-        $canAssign = $actor->can('users.roles');
+        $canAssign = $actor->can('users.update') && $actor->can('roles.update');
 
         return view('livewire.admin.users.index', [
             'users' => $users,

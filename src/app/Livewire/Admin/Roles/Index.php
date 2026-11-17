@@ -4,7 +4,7 @@ namespace App\Livewire\Admin\Roles;
 
 use App\Actions\Admin\DeleteRole;
 use App\Actions\Admin\SaveRole;
-use App\Enums\PermissionName;
+use App\Enums\AdminResource;
 use App\Livewire\Concerns\AuthorizesAdmin;
 use App\Livewire\Concerns\GuardsPropertyTypes;
 use App\Livewire\Concerns\WithFormModal;
@@ -25,10 +25,7 @@ class Index extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes, WithFormModal;
 
-    public const PERMISSION = 'roles.manage';
-
-    // Shown with a "sensitif" label in the form.
-    public const SENSITIVE = ['settings.manage', 'roles.manage', 'users.roles'];
+    public const PERMISSION = 'roles.view_any';
 
     public string $name = '';
 
@@ -89,10 +86,12 @@ class Index extends Component
         $editable = $roles->mapWithKeys(fn (Role $role) => [$role->getKey() => $actor->can('update', $role)])->all();
         $editing = $this->editingId === null ? null : $roles->firstWhere('id', $this->editingId);
 
-        $catalog = [];
+        $catalog = ['admin' => [AdminResource::PANEL_ACCESS => 'Akses panel admin']];
 
-        foreach (PermissionName::cases() as $permission) {
-            $catalog[$permission->group()][$permission->value] = $permission->label();
+        foreach (AdminResource::cases() as $resource) {
+            foreach ($resource->actions() as $action) {
+                $catalog[$resource->group()][$resource->permission($action)] = $resource->label().' · '.$action->label();
+            }
         }
 
         return view('livewire.admin.roles.index', [
@@ -101,7 +100,7 @@ class Index extends Component
             'editing' => $editing,
             'catalog' => $catalog,
             'grantable' => app(PermissionSet::class)->for($actor)->all(),
-            'sensitive' => self::SENSITIVE,
+            'sensitive' => AdminResource::mutatingPermissions(),
             'formLocked' => $editing !== null && ! ($editable[$editing->getKey()] ?? false),
         ]);
     }

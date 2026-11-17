@@ -38,7 +38,7 @@ class UpdateAppSettings
      */
     public function handle(User $actor, array $values, array $secrets, array $clear, ?string $ip = null): array
     {
-        Gate::forUser($actor)->authorize('settings.manage');
+        Gate::forUser($actor)->authorize('settings.update');
 
         if (! PasswordConfirmation::recent()) {
             throw new AuthorizationException('Konfirmasi password diperlukan.');
@@ -54,6 +54,11 @@ class UpdateAppSettings
         $writes = [];
 
         foreach ($this->registry->all() as $key => $item) {
+            // Files go through UpdateBrandAssets (validated and re-encoded), never as a raw path.
+            if ($item['type'] === 'image') {
+                continue;
+            }
+
             if ($item['type'] === 'secret') {
                 if (filter_var($clear[$key] ?? false, FILTER_VALIDATE_BOOL)) {
                     $writes[$key] = null;

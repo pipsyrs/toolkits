@@ -2,7 +2,8 @@
 
 namespace App\Actions\Admin;
 
-use App\Enums\PermissionName;
+use App\Enums\AdminResource;
+use App\Enums\PermissionAction;
 use App\Enums\ToolStatus;
 use App\Models\ToolSetting;
 use App\Models\User;
@@ -18,7 +19,7 @@ class UpdateToolStatus
 
     public function handle(User $admin, string $slug, string $status, ?string $ip = null): void
     {
-        Gate::forUser($admin)->authorize(PermissionName::ToolsManage->value);
+        Gate::forUser($admin)->authorize(AdminResource::Tools->permission(PermissionAction::Update));
 
         $current = $this->catalog->status($slug);
 

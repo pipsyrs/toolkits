@@ -155,7 +155,7 @@ class TwoFactorTest extends TestCase
     public function test_password_login_is_challenged_and_admin_goes_to_admin(): void
     {
         $user = $this->twoFactorUser();
-        $user->assignRole(Role::findOrCreate('moderator', 'web')->givePermissionTo(['admin.access', 'links.view']));
+        $user->assignRole(Role::findOrCreate('moderator', 'web')->givePermissionTo(['admin.access', 'links.view_any']));
 
         $this->post('/login', ['email' => $user->email, 'password' => 'password', 'remember' => 'on'])
             ->assertRedirect(route('two-factor.login'));
@@ -314,8 +314,8 @@ class TwoFactorTest extends TestCase
         $admin = User::factory()->create()->assignRole(User::SUPERADMIN_ROLE);
         session($this->confirmed());
 
-        $role = app(SaveRole::class)->handle($admin, null, 'viewer', ['links.view'], null);
-        app(SaveRole::class)->handle($admin, $role->fresh(), 'viewer', ['links.view', 'admin.access'], null);
+        $role = app(SaveRole::class)->handle($admin, null, 'viewer', ['links.view_any'], null);
+        app(SaveRole::class)->handle($admin, $role->fresh(), 'viewer', ['links.view_any', 'admin.access'], null);
 
         $this->assertSame(0, AdminAuditLog::where('action', 'role.updated')->count());
     }
@@ -329,7 +329,7 @@ class TwoFactorTest extends TestCase
         Livewire::test(RolesIndex::class)->set('selected', 'not-an-array')->assertStatus(422);
         Livewire::test(RolesIndex::class)->set('name', ['x'])->assertStatus(422);
         Livewire::test(RolesIndex::class)->set('selected.0', ['nested'])->assertStatus(422);
-        Livewire::test(RolesIndex::class)->set('selected', ['links.view'])->assertOk()->assertSet('selected', ['links.view']);
+        Livewire::test(RolesIndex::class)->set('selected', ['links.view_any'])->assertOk()->assertSet('selected', ['links.view_any']);
 
         Livewire::test(UsersIndex::class)->set('roleSelection', 'x')->assertStatus(422);
         Livewire::test(UsersIndex::class)->call('editRoles', ['x'])->assertHasErrors('userId');

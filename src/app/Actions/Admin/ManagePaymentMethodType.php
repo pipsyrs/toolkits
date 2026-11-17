@@ -3,7 +3,8 @@
 namespace App\Actions\Admin;
 
 use App\Actions\Admin\Concerns\SwapsSortOrder;
-use App\Enums\PermissionName;
+use App\Enums\AdminResource;
+use App\Enums\PermissionAction;
 use App\Models\PaymentMethodType;
 use App\Models\User;
 use App\Services\Admin\AuditLogger;
@@ -32,7 +33,7 @@ class ManagePaymentMethodType
             'name' => $this->nameRules(),
         ], ['code.regex' => 'Kode hanya huruf kecil, angka, dan tanda - atau _.'], ['code' => 'kode', 'name' => 'nama'])->validate();
 
-        return $this->change($admin, function () use ($admin, $data, $ip) {
+        return $this->change($admin, PermissionAction::Create, function () use ($admin, $data, $ip) {
             if (PaymentMethodType::query()->where('code', $data['code'])->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['code' => 'Kode tipe sudah dipakai.']);
             }
@@ -55,7 +56,7 @@ class ManagePaymentMethodType
 
         Validator::make(['name' => $name], ['name' => $this->nameRules()], [], ['name' => 'nama'])->validate();
 
-        $this->change($admin, function () use ($admin, $id, $name, $ip) {
+        $this->change($admin, PermissionAction::Update, function () use ($admin, $id, $name, $ip) {
             $type = $this->locked($id);
 
             if ($type->name === $name) {
@@ -69,7 +70,7 @@ class ManagePaymentMethodType
 
     public function move(User $admin, string $id, bool $up, ?string $ip = null): void
     {
-        $this->change($admin, function () use ($admin, $id, $up, $ip) {
+        $this->change($admin, PermissionAction::Update, function () use ($admin, $id, $up, $ip) {
             $type = $this->locked($id);
             $all = PaymentMethodType::query()->orderBy('sort')->orderBy('id')->lockForUpdate()->get();
 
@@ -82,7 +83,7 @@ class ManagePaymentMethodType
     // Refused while methods still use the type (the FK restricts it too).
     public function delete(User $admin, string $id, ?string $ip = null): void
     {
-        $this->change($admin, function () use ($admin, $id, $ip) {
+        $this->change($admin, PermissionAction::Delete, function () use ($admin, $id, $ip) {
             $type = $this->locked($id);
             $used = $type->methods()->lockForUpdate()->count();
 
@@ -109,9 +110,9 @@ class ManagePaymentMethodType
      * @param  Closure(): T  $change
      * @return T
      */
-    private function change(User $admin, Closure $change): mixed
+    private function change(User $admin, PermissionAction $action, Closure $change): mixed
     {
-        Gate::forUser($admin)->authorize(PermissionName::PaymentMethodsManage->value);
+        Gate::forUser($admin)->authorize(AdminResource::PaymentMethodTypes->permission($action));
 
         return DB::transaction($change);
     }

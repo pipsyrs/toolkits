@@ -85,6 +85,8 @@ class FileProcessor
                 fn ($in, $out) => $this->images->compress($in['path'], $out, (string) $options['level'])),
             'image-resize' => $this->each($inputs, $outDir, fn ($in) => $in['base'].'-resize.'.$this->images->formatOf($in['path']),
                 fn ($in, $out) => $this->images->resize($in['path'], $out, $options)),
+            'remove-bg' => $this->each($inputs, $outDir, fn ($in) => $in['base'].'-tanpa-bg.png',
+                fn ($in, $out) => $this->images->removeBackground($in['path'], $out, $options)),
             'pdf-compress' => $this->each($inputs, $outDir, fn ($in) => $in['base'].'-kompres.pdf',
                 fn ($in, $out) => $this->pdf->compress($in['path'], $out, (string) $options['level'])),
             'pdf-merge' => $this->single($outDir.'/gabungan.pdf',

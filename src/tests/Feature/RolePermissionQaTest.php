@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Actions\Admin\AssignUserRoles;
 use App\Actions\Admin\DeleteRole;
 use App\Actions\Admin\SaveRole;
-use App\Enums\PermissionName;
+use App\Enums\AdminResource;
 use App\Livewire\Admin\Roles\Index as RolesIndex;
 use App\Livewire\Admin\Users\Index as UsersIndex;
 use App\Livewire\Client\Links\Index as ClientLinks;
@@ -32,12 +32,12 @@ class RolePermissionQaTest extends TestCase
 
     // route name => permission required (besides admin.access)
     private const MENU = [
-        'admin.users.index' => 'users.view',
-        'admin.links.index' => 'links.view',
-        'admin.plans.edit' => 'plans.manage',
-        'admin.audit-logs.index' => 'audit.view',
-        'admin.roles.index' => 'roles.manage',
-        'admin.settings.edit' => 'settings.manage',
+        'admin.users.index' => 'users.view_any',
+        'admin.links.index' => 'links.view_any',
+        'admin.plans.edit' => 'plans.view_any',
+        'admin.audit-logs.index' => 'audit.view_any',
+        'admin.roles.index' => 'roles.view_any',
+        'admin.settings.edit' => 'settings.view_any',
     ];
 
     protected function setUp(): void
@@ -76,7 +76,7 @@ class RolePermissionQaTest extends TestCase
      */
     private function featurePermissions(): array
     {
-        return array_values(array_diff(PermissionName::values(), ['admin.access']));
+        return array_values(array_diff(AdminResource::permissions(), ['admin.access']));
     }
 
     private function confirmed(): array
@@ -109,12 +109,12 @@ class RolePermissionQaTest extends TestCase
     {
         $routes = [
             '/admin' => 'admin.access',
-            '/admin/users' => 'users.view',
-            '/admin/links' => 'links.view',
-            '/admin/plans' => 'plans.manage',
-            '/admin/audit-logs' => 'audit.view',
-            '/admin/settings' => 'settings.manage',
-            '/admin/roles' => 'roles.manage',
+            '/admin/users' => 'users.view_any',
+            '/admin/links' => 'links.view_any',
+            '/admin/plans' => 'plans.view_any',
+            '/admin/audit-logs' => 'audit.view_any',
+            '/admin/settings' => 'settings.view_any',
+            '/admin/roles' => 'roles.view_any',
         ];
 
         foreach (array_merge(['admin.access'], $this->featurePermissions()) as $permission) {
@@ -159,13 +159,13 @@ class RolePermissionQaTest extends TestCase
 
         // [uri, method, params, permissions needed]
         $actions = [
-            ['/admin/users', 'block', [$target->id, 'Spam link'], ['users.view', 'users.block']],
-            ['/admin/links', 'disable', [$link->id, 'Phishing'], ['links.view', 'links.moderate']],
-            ['/admin/plans', 'save', [], ['plans.manage']],
-            ['/admin/audit-logs', '$refresh', [], ['audit.view']],
-            ['/admin/settings', 'save', [], ['settings.manage']],
-            ['/admin/roles', 'delete', [$victimRole->id], ['roles.manage']],
-            ['/admin/roles', 'save', [], ['roles.manage']],
+            ['/admin/users', 'block', [$target->id, 'Spam link'], ['users.view_any', 'users.update']],
+            ['/admin/links', 'disable', [$link->id, 'Phishing'], ['links.view_any', 'links.update']],
+            ['/admin/plans', 'save', [], ['plans.view_any', 'plans.create', 'plans.update', 'plans.delete']],
+            ['/admin/audit-logs', '$refresh', [], ['audit.view_any']],
+            ['/admin/settings', 'save', [], ['settings.view_any', 'settings.update']],
+            ['/admin/roles', 'delete', [$victimRole->id], ['roles.view_any', 'roles.create', 'roles.update', 'roles.delete']],
+            ['/admin/roles', 'save', [], ['roles.view_any', 'roles.create', 'roles.update', 'roles.delete']],
         ];
 
         $snapshots = [];
@@ -202,7 +202,7 @@ class RolePermissionQaTest extends TestCase
         $opened = $this->replay($admin, $this->snapshotOf($admin, '/admin/users'), 'editRoles', [$target->id])->assertOk();
         $snapshot = $opened->json('components.0.snapshot');
 
-        $viewer = $this->userWithRole('users-viewer', ['admin.access', 'users.view']);
+        $viewer = $this->userWithRole('users-viewer', ['admin.access', 'users.view_any']);
         $this->replay($viewer, $snapshot, 'saveRoles', [], ['roleSelection' => [$super->id]])->assertForbidden();
         $this->replay($viewer, $snapshot, 'editRoles', [$target->id])->assertForbidden();
 
@@ -213,7 +213,7 @@ class RolePermissionQaTest extends TestCase
 
     public function test_editing_user_id_is_locked_against_tampering(): void
     {
-        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view', 'users.roles']);
+        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view_any', 'users.update', 'roles.update']);
         $normal = User::factory()->create();
         $superTarget = $this->superadmin();
 
@@ -234,13 +234,13 @@ class RolePermissionQaTest extends TestCase
 
     public function test_save_roles_rechecks_target_after_modal_opened(): void
     {
-        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view', 'users.roles']);
+        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view_any', 'users.update', 'roles.update']);
         $target = User::factory()->create();
 
         $opened = $this->replay($assigner, $this->snapshotOf($assigner, '/admin/users'), 'editRoles', [$target->id])->assertOk();
 
         // Target promoted to a bigger admin after the modal was opened.
-        $target->assignRole($this->role('bigger', ['admin.access', 'settings.manage']));
+        $target->assignRole($this->role('bigger', ['admin.access', 'settings.update']));
 
         $this->replay($assigner, $opened->json('components.0.snapshot'), 'saveRoles', [], ['roleSelection' => []])
             ->assertForbidden();
@@ -249,8 +249,8 @@ class RolePermissionQaTest extends TestCase
 
     public function test_role_selection_tampering_is_rejected(): void
     {
-        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view', 'users.roles', 'links.view']);
-        $bigger = $this->role('bigger', ['admin.access', 'settings.manage']);
+        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view_any', 'users.update', 'roles.update', 'links.view_any']);
+        $bigger = $this->role('bigger', ['admin.access', 'settings.update']);
         $super = Role::findByName(User::SUPERADMIN_ROLE, 'web');
         $target = User::factory()->create();
 
@@ -271,7 +271,7 @@ class RolePermissionQaTest extends TestCase
 
     public function test_cannot_open_role_modal_for_self_or_superadmin(): void
     {
-        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view', 'users.roles']);
+        $assigner = $this->userWithRole('assigner', ['admin.access', 'users.view_any', 'users.update', 'roles.update']);
         $this->actingAs($assigner);
         session($this->confirmed());
 
@@ -281,22 +281,22 @@ class RolePermissionQaTest extends TestCase
 
     public function test_selected_tampering_in_role_form_via_replay(): void
     {
-        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage', 'links.view']);
+        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete', 'links.view_any']);
         $snapshot = $this->snapshotOf($manager, '/admin/roles');
 
-        $this->replay($manager, $snapshot, 'save', [], ['name' => 'escalate', 'selected' => ['links.view', 'roles.manage', 'settings.manage']])
+        $this->replay($manager, $snapshot, 'save', [], ['name' => 'escalate', 'selected' => ['links.view_any', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete', 'settings.update']])
             ->assertOk();
         $this->assertNull(Role::where('name', 'escalate')->first());
 
         // Non-string entries are dropped, not crashed on.
-        $this->replay($manager, $snapshot, 'save', [], ['name' => 'nested', 'selected' => [['settings.manage'], 5, 'links.view']])
+        $this->replay($manager, $snapshot, 'save', [], ['name' => 'nested', 'selected' => [['settings.update'], 5, 'links.view_any']])
             ->assertOk();
-        $this->assertEqualsCanonicalizing(['admin.access', 'links.view'], Role::findByName('nested', 'web')->permissions->pluck('name')->all());
+        $this->assertEqualsCanonicalizing(['admin.access', 'links.view_any'], Role::findByName('nested', 'web')->permissions->pluck('name')->all());
     }
 
     public function test_role_id_is_locked_in_form(): void
     {
-        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage']);
+        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete']);
         $super = Role::findByName(User::SUPERADMIN_ROLE, 'web');
         $snapshot = $this->snapshotOf($manager, '/admin/roles');
 
@@ -307,8 +307,8 @@ class RolePermissionQaTest extends TestCase
 
     public function test_saving_locked_role_edit_pages_is_forbidden(): void
     {
-        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage']);
-        $bigger = $this->role('bigger', ['admin.access', 'settings.manage']);
+        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete']);
+        $bigger = $this->role('bigger', ['admin.access', 'settings.update']);
         $own = Role::findByName('role-manager', 'web');
         $super = Role::findByName(User::SUPERADMIN_ROLE, 'web');
 
@@ -317,44 +317,44 @@ class RolePermissionQaTest extends TestCase
         foreach ([$super, $own, $bigger] as $role) {
             // Opening a locked role is read-only; saving it must still be refused.
             $snapshot = $this->replay($manager, $list, 'openEdit', [$role->id])->assertOk()->json('components.0.snapshot');
-            $this->replay($manager, $snapshot, 'save', [], ['name' => 'renamed-'.$role->getKey(), 'selected' => ['admin.access', 'roles.manage']])
+            $this->replay($manager, $snapshot, 'save', [], ['name' => 'renamed-'.$role->getKey(), 'selected' => ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete']])
                 ->assertForbidden();
         }
 
-        $this->assertSame(['admin.access', 'roles.manage'], $own->fresh()->permissions->pluck('name')->sort()->values()->all());
+        $this->assertSame(['admin.access', 'roles.create', 'roles.delete', 'roles.update', 'roles.view_any'], $own->fresh()->permissions->pluck('name')->sort()->values()->all());
         $this->assertSame('bigger', $bigger->fresh()->name);
-        $this->assertTrue($bigger->fresh()->hasPermissionTo('settings.manage'));
+        $this->assertTrue($bigger->fresh()->hasPermissionTo('settings.update'));
     }
 
     // --- Escalation -------------------------------------------------------------
 
     public function test_cannot_add_foreign_permission_when_editing_editable_role(): void
     {
-        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage', 'links.view']);
-        $role = $this->role('link-viewer', ['admin.access', 'links.view']);
+        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete', 'links.view_any']);
+        $role = $this->role('link-viewer', ['admin.access', 'links.view_any']);
         session($this->confirmed());
 
         try {
-            app(SaveRole::class)->handle($manager, $role, 'link-viewer', ['links.view', 'users.roles'], null);
+            app(SaveRole::class)->handle($manager, $role, 'link-viewer', ['links.view_any', 'users.update', 'roles.update'], null);
             $this->fail('escalation via edit allowed');
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('permissions', $e->errors());
         }
 
         try {
-            app(SaveRole::class)->handle($manager, $role, User::SUPERADMIN_ROLE, ['links.view'], null);
+            app(SaveRole::class)->handle($manager, $role, User::SUPERADMIN_ROLE, ['links.view_any'], null);
             $this->fail('rename to superadmin allowed');
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('name', $e->errors());
         }
 
-        $this->assertFalse($role->fresh()->hasPermissionTo('users.roles'));
+        $this->assertFalse($role->fresh()->hasPermissionTo('users.update'));
     }
 
     public function test_cannot_delete_own_or_bigger_role(): void
     {
-        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage']);
-        $bigger = $this->role('bigger', ['admin.access', 'settings.manage']);
+        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete']);
+        $bigger = $this->role('bigger', ['admin.access', 'settings.update']);
         session($this->confirmed());
 
         foreach ([Role::findByName('role-manager', 'web'), $bigger] as $role) {
@@ -370,7 +370,7 @@ class RolePermissionQaTest extends TestCase
     public function test_delete_role_in_use_and_bad_id_via_livewire(): void
     {
         $admin = $this->superadmin();
-        $this->userWithRole('moderator', ['admin.access', 'links.view']);
+        $this->userWithRole('moderator', ['admin.access', 'links.view_any']);
         $this->actingAs($admin);
         session($this->confirmed());
 
@@ -386,7 +386,7 @@ class RolePermissionQaTest extends TestCase
     {
         $admin = $this->superadmin();
         $target = User::factory()->create();
-        $role = $this->role('link-viewer', ['admin.access', 'links.view']);
+        $role = $this->role('link-viewer', ['admin.access', 'links.view_any']);
         $this->actingAs($admin);
         session(['auth.password_confirmed_at' => time() - 1000]);
 
@@ -410,8 +410,8 @@ class RolePermissionQaTest extends TestCase
             $this->actingAs($admin)->withSession($this->confirmed())->get($uri)->assertOk();
         }
 
-        $all = app(SaveRole::class)->handle($admin, null, 'everything', PermissionName::values(), null);
-        $this->assertCount(count(PermissionName::values()), $all->permissions);
+        $all = app(SaveRole::class)->handle($admin, null, 'everything', AdminResource::permissions(), null);
+        $this->assertCount(count(AdminResource::permissions()), $all->permissions);
 
         app(AssignUserRoles::class)->handle($admin, $target, [Role::findByName(User::SUPERADMIN_ROLE, 'web')->id], null);
         $this->assertTrue($target->fresh()->isSuperadmin());
@@ -437,7 +437,7 @@ class RolePermissionQaTest extends TestCase
 
     public function test_login_without_admin_access_goes_to_dashboard(): void
     {
-        foreach ([User::factory()->create(), $this->userWithRole('no-admin', ['links.view'])] as $user) {
+        foreach ([User::factory()->create(), $this->userWithRole('no-admin', ['links.view_any'])] as $user) {
             $this->post('/login', ['email' => $user->email, 'password' => 'password'])->assertRedirect(route('dashboard'));
             $this->post('/logout');
         }
@@ -445,7 +445,7 @@ class RolePermissionQaTest extends TestCase
 
     public function test_admin_login_honours_only_admin_intended_url(): void
     {
-        $user = $this->userWithRole('moderator', ['admin.access', 'links.view']);
+        $user = $this->userWithRole('moderator', ['admin.access', 'links.view_any']);
 
         $this->withSession(['url.intended' => url('/dashboard/links')])
             ->post('/login', ['email' => $user->email, 'password' => 'password'])
@@ -460,13 +460,13 @@ class RolePermissionQaTest extends TestCase
     public function test_permission_changes_apply_without_relogin(): void
     {
         $admin = $this->superadmin();
-        $role = $this->role('link-viewer', ['admin.access', 'links.view']);
+        $role = $this->role('link-viewer', ['admin.access', 'links.view_any']);
         $user = User::factory()->create()->assignRole($role);
         session($this->confirmed());
 
         $this->actingAs($user->fresh())->get('/admin/links')->assertOk();
 
-        app(SaveRole::class)->handle($admin, $role, 'link-viewer', ['audit.view'], null);
+        app(SaveRole::class)->handle($admin, $role, 'link-viewer', ['audit.view_any'], null);
         $this->actingAs($user->fresh())->get('/admin/links')->assertForbidden();
         $this->actingAs($user->fresh())->get('/admin/audit-logs')->assertOk();
 
@@ -482,16 +482,16 @@ class RolePermissionQaTest extends TestCase
         $target = User::factory()->create();
         session($this->confirmed());
 
-        $role = app(SaveRole::class)->handle($admin, null, 'auditor', ['audit.view'], '10.0.0.1');
+        $role = app(SaveRole::class)->handle($admin, null, 'auditor', ['audit.view_any'], '10.0.0.1');
         $created = AdminAuditLog::where('action', 'role.created')->firstOrFail();
         $this->assertSame([$admin->id, '10.0.0.1', $role->id], [$created->admin_id, $created->ip, $created->subject_id]);
-        $this->assertEqualsCanonicalizing(['admin.access', 'audit.view'], $created->changes['added']);
+        $this->assertEqualsCanonicalizing(['admin.access', 'audit.view_any'], $created->changes['added']);
 
-        app(SaveRole::class)->handle($admin, $role, 'auditor-2', ['links.view'], null);
+        app(SaveRole::class)->handle($admin, $role, 'auditor-2', ['links.view_any'], null);
         $updated = AdminAuditLog::where('action', 'role.updated')->firstOrFail()->changes;
         $this->assertSame(['old' => 'auditor', 'new' => 'auditor-2'], $updated['name']);
-        $this->assertSame(['links.view'], $updated['added']);
-        $this->assertSame(['audit.view'], $updated['removed']);
+        $this->assertSame(['links.view_any'], $updated['added']);
+        $this->assertSame(['audit.view_any'], $updated['removed']);
 
         app(AssignUserRoles::class)->handle($admin, $target, [$role->id], null);
         app(AssignUserRoles::class)->handle($admin, $target->fresh(), [$role->id], null);
@@ -503,12 +503,12 @@ class RolePermissionQaTest extends TestCase
         app(DeleteRole::class)->handle($admin, $role->fresh(), null);
         $deleted = AdminAuditLog::where('action', 'role.deleted')->firstOrFail()->changes;
         $this->assertSame('auditor-2', $deleted['name']);
-        $this->assertEqualsCanonicalizing(['admin.access', 'links.view'], $deleted['permissions']);
+        $this->assertEqualsCanonicalizing(['admin.access', 'links.view_any'], $deleted['permissions']);
     }
 
     public function test_custom_admin_role_is_not_auto_linked_by_google_email(): void
     {
-        $user = $this->userWithRole('moderator', ['admin.access', 'links.view']);
+        $user = $this->userWithRole('moderator', ['admin.access', 'links.view_any']);
         $google = (new GoogleUser)
             ->setRaw(['sub' => 'g-qa', 'email' => $user->email, 'email_verified' => true])
             ->map(['id' => 'g-qa', 'name' => 'Budi', 'email' => $user->email, 'avatar' => null]);
@@ -525,11 +525,11 @@ class RolePermissionQaTest extends TestCase
     // Typed Livewire props reject scalar/array swaps (TypeError, 500) without side effects.
     public function test_type_mismatch_tampering_has_no_side_effect(): void
     {
-        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.manage', 'users.view', 'users.roles']);
+        $manager = $this->userWithRole('role-manager', ['admin.access', 'roles.view_any', 'roles.create', 'roles.update', 'roles.delete', 'users.view_any', 'users.update', 'roles.update']);
         $target = User::factory()->create();
 
         $form = $this->snapshotOf($manager, '/admin/roles');
-        $this->assertFalse($this->replay($manager, $form, 'save', [], ['name' => 'typed', 'selected' => 'settings.manage'])->isSuccessful());
+        $this->assertFalse($this->replay($manager, $form, 'save', [], ['name' => 'typed', 'selected' => 'settings.update'])->isSuccessful());
         $this->assertFalse($this->replay($manager, $form, 'save', [], ['name' => ['x'], 'selected' => []])->isSuccessful());
 
         $opened = $this->replay($manager, $this->snapshotOf($manager, '/admin/users'), 'editRoles', [$target->id])->assertOk();

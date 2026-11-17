@@ -20,7 +20,7 @@ class Index extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes, WithFormModal;
 
-    public const PERMISSION = 'payment_methods.manage';
+    public const PERMISSION = 'payment_method_types.view_any';
 
     // Only used when adding; the code is fixed afterwards.
     public string $code = '';

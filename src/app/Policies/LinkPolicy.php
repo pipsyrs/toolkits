@@ -24,12 +24,12 @@ class LinkPolicy
 
     public function disable(User $user, Link $link): bool
     {
-        return $user->can('links.moderate');
+        return $user->can('links.update');
     }
 
     public function enable(User $user, Link $link): bool
     {
-        return $user->can('links.moderate');
+        return $user->can('links.update');
     }
 
     private function owns(User $user, Link $link): bool

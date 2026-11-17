@@ -49,7 +49,7 @@
                                         @endif
                                     </td>
                                     <td class="px-5 py-3 text-right">
-                                        @can('links.moderate')
+                                        @can('links.update')
                                         @if($link->disabled_at)
                                             <x-confirm-button :action="'enable(\''.$link->id.'\')'" :title="'Aktifkan kembali /s/'.$link->code.'?'"
                                                 message="Link bisa diakses publik lagi." confirm="Aktifkan" variant="primary"

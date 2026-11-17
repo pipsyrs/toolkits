@@ -64,7 +64,7 @@ class TwoFactorQaTest extends TestCase
 
     private function adminRole(): Role
     {
-        return Role::findOrCreate('moderator', 'web')->givePermissionTo(['admin.access', 'links.view']);
+        return Role::findOrCreate('moderator', 'web')->givePermissionTo(['admin.access', 'links.view_any']);
     }
 
     private function mockGoogle(string $id, string $email): void

@@ -544,6 +544,129 @@ for (const type of ['contextmenu', 'dragstart']) {
     });
 }
 
+/* ---------- Crop (Hapus Background) ---------- */
+
+// Crop box in 0–1 units of the picked image; mirrors the cropX/Y/W/H rules in App\Livewire\Tools\RemoveBackground.
+const MIN_CROP = 0.05;
+const KEY_STEP = 0.01;
+const CROP_RATIOS = { free: null, original: 'original', '1:1': 1, '4:5': 4 / 5, '3:4': 3 / 4, '16:9': 16 / 9, custom: 'custom' };
+
+const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
+function bgCropper() {
+    let drag = null; // { mode: 'move' | corner, startX, startY, box, rect }
+
+    return {
+        url: null,
+        natural: null, // { width, height }
+        box: { x: 0, y: 0, w: 1, h: 1 },
+        ratio: 'free',
+        customW: 3,
+        customH: 2,
+
+        setFiles(files) {
+            this.url && URL.revokeObjectURL(this.url);
+            const file = files.find((f) => FORMAT_OF[f.type]);
+            this.url = file ? URL.createObjectURL(file) : null;
+            this.natural = null;
+        },
+
+        loaded(event) {
+            this.natural = { width: event.target.naturalWidth, height: event.target.naturalHeight };
+            this.applyRatio();
+        },
+
+        // Width/height of the box in image pixels must follow the ratio: w·W / (h·H) = aspect.
+        aspect() {
+            const ratio = CROP_RATIOS[this.ratio];
+            if (ratio === 'original') return this.natural.width / this.natural.height;
+            if (ratio === 'custom') return this.customW > 0 && this.customH > 0 ? this.customW / this.customH : null;
+            return ratio;
+        },
+
+        applyRatio() {
+            if (!this.natural) return;
+            const aspect = this.aspect();
+            if (!aspect) return this.commit({ ...this.box });
+            const imageAspect = this.natural.width / this.natural.height;
+            // Largest centred box with that aspect.
+            const [w, h] = aspect > imageAspect ? [1, imageAspect / aspect] : [aspect / imageAspect, 1];
+            this.commit({ x: (1 - w) / 2, y: (1 - h) / 2, w, h });
+        },
+
+        commit(box) {
+            const w = clamp(box.w, MIN_CROP, 1);
+            const h = clamp(box.h, MIN_CROP, 1);
+            this.box = { x: clamp(box.x, 0, 1 - w), y: clamp(box.y, 0, 1 - h), w, h };
+            // Deferred: sent with the next request (Proses file), no round trip per drag.
+            Object.assign(this.$wire, { cropX: this.box.x, cropY: this.box.y, cropW: this.box.w, cropH: this.box.h });
+        },
+
+        start(event, mode) {
+            const rect = this.$refs.frame.getBoundingClientRect();
+            drag = { mode, startX: event.clientX, startY: event.clientY, box: { ...this.box }, rect };
+            event.currentTarget.setPointerCapture(event.pointerId);
+        },
+
+        move(event) {
+            if (!drag) return;
+            const dx = (event.clientX - drag.startX) / drag.rect.width;
+            const dy = (event.clientY - drag.startY) / drag.rect.height;
+            const b = drag.box;
+            if (drag.mode === 'move') return this.commit({ ...b, x: b.x + dx, y: b.y + dy });
+
+            // Corner resize: the opposite corner stays put.
+            const left = drag.mode.includes('w');
+            const top = drag.mode.includes('n');
+            let w = clamp(left ? b.w - dx : b.w + dx, MIN_CROP, left ? b.x + b.w : 1 - b.x);
+            let h = clamp(top ? b.h - dy : b.h + dy, MIN_CROP, top ? b.y + b.h : 1 - b.y);
+            const aspect = this.aspect();
+            if (aspect) {
+                const k = this.natural.width / this.natural.height;
+                // Follow the larger change, then shrink both until they fit.
+                h = Math.max(h, (w * k) / aspect);
+                w = (h * aspect) / k;
+                const maxW = left ? b.x + b.w : 1 - b.x;
+                const maxH = top ? b.y + b.h : 1 - b.y;
+                const fit = Math.min(1, maxW / w, maxH / h);
+                [w, h] = [w * fit, h * fit];
+            }
+            this.commit({ x: left ? b.x + b.w - w : b.x, y: top ? b.y + b.h - h : b.y, w, h });
+        },
+
+        end() {
+            drag = null;
+        },
+
+        // Arrows move the box, Shift+arrows resize it.
+        key(event) {
+            const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+            if (!d) return;
+            event.preventDefault();
+            const [dx, dy] = [d[0] * KEY_STEP, d[1] * KEY_STEP];
+            if (!event.shiftKey) return this.commit({ ...this.box, x: this.box.x + dx, y: this.box.y + dy });
+            const aspect = this.aspect();
+            const w = this.box.w + dx;
+            const h = aspect ? (w * this.natural.width) / this.natural.height / aspect : this.box.h + dy;
+            this.commit({ ...this.box, w, h });
+        },
+
+        style() {
+            const { x, y, w, h } = this.box;
+            return `left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%`;
+        },
+
+        size() {
+            if (!this.natural) return '';
+            return `${Math.round(this.box.w * this.natural.width)}×${Math.round(this.box.h * this.natural.height)} px`;
+        },
+
+        destroy() {
+            this.url && URL.revokeObjectURL(this.url);
+        },
+    };
+}
+
 document.addEventListener('alpine:init', () => {
     const Alpine = window.Alpine;
 
@@ -616,4 +739,5 @@ document.addEventListener('alpine:init', () => {
 
     Alpine.data('imageLive', imageLive);
     Alpine.data('imagePdfLayout', imagePdfLayout);
+    Alpine.data('bgCropper', bgCropper);
 });

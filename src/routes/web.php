@@ -17,6 +17,7 @@ Route::prefix('tools')->name('tools.')->group(function () {
     Route::livewire('/image-convert', Tools\ImageConvert::class)->name('image-convert');
     Route::livewire('/image-compress', Tools\ImageCompress::class)->name('image-compress');
     Route::livewire('/image-resize', Tools\ImageResize::class)->name('image-resize');
+    Route::livewire('/remove-bg', Tools\RemoveBackground::class)->name('remove-bg');
     Route::livewire('/pdf-merge', Tools\PdfMerge::class)->name('pdf-merge');
     Route::livewire('/pdf-split', Tools\PdfSplit::class)->name('pdf-split');
     Route::livewire('/pdf-compress', Tools\PdfCompress::class)->name('pdf-compress');

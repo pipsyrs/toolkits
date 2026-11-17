@@ -2,7 +2,8 @@
 
 namespace App\Actions\Admin;
 
-use App\Enums\PermissionName;
+use App\Enums\AdminResource;
+use App\Enums\PermissionAction;
 use App\Enums\SupportReportStatus;
 use App\Models\SupportReport;
 use App\Models\User;
@@ -22,7 +23,7 @@ class HandleSupportReport
 
     public function handle(User $admin, string $id, string $status, string $reply, ?string $ip = null): void
     {
-        Gate::forUser($admin)->authorize(PermissionName::ReportsManage->value);
+        Gate::forUser($admin)->authorize(AdminResource::Reports->permission(PermissionAction::Update));
 
         $data = Validator::make(['status' => $status, 'reply' => trim($reply)], [
             'status' => ['required', Rule::enum(SupportReportStatus::class)],

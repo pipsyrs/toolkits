@@ -78,6 +78,18 @@ return [
             'status' => 'live',
         ],
         [
+            'slug' => 'remove-bg',
+            'name' => 'Hapus Background',
+            'route' => 'tools.remove-bg',
+            'category' => 'image',
+            'description' => 'Hapus latar belakang foto otomatis, hasilnya PNG transparan.',
+            'accept' => 'image/jpeg,image/png,image/webp',
+            'status' => 'live',
+            'features' => [
+                'crop' => 'Pengaturan crop',
+            ],
+        ],
+        [
             'slug' => 'pdf-merge',
             'name' => 'Gabung PDF',
             'route' => 'tools.pdf-merge',
@@ -135,6 +147,7 @@ return [
         'max_pixels' => 50_000_000,
         'process_timeout' => 85,
         'ghostscript' => env('GHOSTSCRIPT_BIN', 'gs'),
+        'rembg' => env('REMBG_BIN', 'rembg'),
     ],
 
     // Full-screen ad shown after a successful tool operation (plans with ads).
@@ -144,5 +157,11 @@ return [
 
     // Store for app_settings ciphertext cache (file in production).
     'settings_cache_store' => env('SETTINGS_CACHE_STORE', 'file'),
+
+    // Uploaded brand images (path on the public disk), set from admin settings; null = built-in defaults.
+    'branding' => [
+        'logo' => null,
+        'favicon' => null,
+    ],
 
 ];

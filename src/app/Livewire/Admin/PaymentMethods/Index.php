@@ -24,7 +24,7 @@ class Index extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes, WithFileUploads, WithFormModal;
 
-    public const PERMISSION = 'payment_methods.manage';
+    public const PERMISSION = 'payment_methods.view_any';
 
     // Only used when adding; the channel of an existing method is fixed.
     public string $channel = '';

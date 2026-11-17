@@ -2,37 +2,39 @@
     use App\Services\Tier\Entitlements;
 
     $limits = $this->limits;
-    $maxMb = Entitlements::uploadLimit($limits, 'max_file_mb');
-    $maxFiles = Entitlements::uploadLimit($limits, 'max_files_per_op');
-    $accept = $this->accept ?: 'image/jpeg,image/png,image/webp';
-    $isGuest = $this->isGuest;
-    $levels = ['low' => 'Ringan (kualitas terbaik)', 'medium' => 'Sedang (seimbang)', 'high' => 'Kuat (ukuran terkecil)'];
+    $levels = [
+        'low' => ['Ringan', 'Kualitas terbaik'],
+        'medium' => ['Sedang', 'Seimbang'],
+        'high' => ['Kuat', 'Ukuran terkecil'],
+    ];
 @endphp
 
-<div class="mx-auto max-w-3xl">
-    <header class="mb-6">
-        <p class="eyebrow">Gambar</p>
-        <h1 class="page-title">Kompres Gambar</h1>
-        <p class="mt-1 text-sm text-muted">Perkecil ukuran gambar tanpa banyak kehilangan kualitas.</p>
-    </header>
+<x-tool-layout slug="image-compress" :steps="[
+    ['Unggah gambar', 'JPG, PNG, atau WebP, bisa beberapa sekaligus.'],
+    ['Pilih tingkat', 'Bandingkan hasilnya langsung dengan penggeser.'],
+    ['Unduh', 'Beberapa file dikemas jadi satu ZIP.'],
+]">
+    <x-slot:meta><x-file-tool-meta :limits="$limits" /></x-slot:meta>
 
-    <div class="glass-strong space-y-5 p-6">
-        <x-file-dropzone :accept="$accept" :max-files="$maxFiles" :max-mb="$maxMb" multiple />
+    <x-file-dropzone :accept="$this->accept ?: 'image/jpeg,image/png,image/webp'" :max-files="Entitlements::uploadLimit($limits, 'max_files_per_op')" :max-mb="Entitlements::uploadLimit($limits, 'max_file_mb')" multiple />
+    <x-image-live-preview tool="compress" />
 
-        <fieldset>
-            <legend class="label">Tingkat kompresi</legend>
-            <div class="grid gap-2 sm:grid-cols-3">
-                @foreach($levels as $val => $label)
-                    <label class="cursor-pointer rounded-lg border border-line px-3 py-2.5 text-sm has-[:checked]:border-line-strong has-[:checked]:bg-sunken has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-fg">
-                        <input type="radio" wire:model="level" value="{{ $val }}" class="sr-only">
-                        <span class="font-medium text-fg">{{ $label }}</span>
-                    </label>
-                @endforeach
-            </div>
-        </fieldset>
+    <x-slot:aside>
+        <div class="tool-panel">
+            <fieldset class="tool-panel-section">
+                <legend class="tool-panel-title mb-3">Tingkat kompresi</legend>
+                <div class="grid gap-2">
+                    @foreach($levels as $val => [$label, $hint])
+                        <label class="option-tile justify-between">
+                            <input type="radio" wire:model="level" value="{{ $val }}" class="sr-only">
+                            <span class="font-medium">{{ $label }}</span>
+                            <span class="option-hint">{{ $hint }}</span>
+                        </label>
+                    @endforeach
+                </div>
+            </fieldset>
 
-        <x-image-live-preview tool="compress" />
-
-        @include('livewire.tools._process', ['isGuest' => $isGuest])
-    </div>
-</div>
+            @include('livewire.tools._process', ['isGuest' => $this->isGuest])
+        </div>
+    </x-slot:aside>
+</x-tool-layout>

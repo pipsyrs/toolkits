@@ -9,6 +9,7 @@ class SettingRegistry
 {
     public const GROUPS = [
         'general' => 'Umum',
+        'branding' => 'Branding',
         'mail' => 'Email (SMTP)',
         'google' => 'Login Google',
         'xendit' => 'Payment gateway',
@@ -108,6 +109,21 @@ class SettingRegistry
                 'type' => 'email',
                 'rules' => ['string', 'max:255', 'email:rfc'],
                 'config' => 'toolkits.support_email',
+            ],
+            // Stored as a public-disk path; written only by UpdateBrandAssets, never by the generic form.
+            'branding.logo' => [
+                'label' => 'Logo',
+                'type' => 'image',
+                'rules' => [],
+                'config' => 'toolkits.branding.logo',
+                'help' => 'Menggantikan ikon dan nama situs di header dan sidebar. Sebaiknya latar transparan, berisi nama situs.',
+            ],
+            'branding.favicon' => [
+                'label' => 'Favicon',
+                'type' => 'image',
+                'rules' => [],
+                'config' => 'toolkits.branding.favicon',
+                'help' => 'Ikon di tab browser. Gunakan gambar persegi, minimal 64×64 px.',
             ],
             'mail.mailer' => [
                 'label' => 'Mailer',

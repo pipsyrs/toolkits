@@ -6,6 +6,13 @@
     'sortable' => false,
 ])
 
+@php
+    // "image/jpeg,application/pdf" -> "JPG, PDF" for the drop area hint.
+    $formats = collect(explode(',', (string) $accept))->filter()
+        ->map(fn ($type) => strtoupper(['image/jpeg' => 'jpg'][trim($type)] ?? \Illuminate\Support\Str::after(trim($type), '/')))
+        ->unique()->implode(', ');
+@endphp
+
 {{-- Pemilih file: validasi cepat di browser, lalu diunggah ke properti Livewire "files" saat event "submit-files".
      Setiap perubahan daftar dikirim lewat event "files-changed" untuk panel pratinjau. --}}
 <div
@@ -73,12 +80,22 @@
         @dragover.prevent="dragging = true"
         @dragleave.prevent="dragging = false"
         @drop.prevent="dragging = false; add($event.dataTransfer.files)"
-        :class="dragging ? 'border-tool bg-tool/10' : 'border-line'"
-        class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 text-center transition hover:border-tool bg-sunken/40"
+        :class="[dragging ? 'border-tool bg-tool/10' : 'border-line-strong/25 bg-surface/80 hover:border-tool', files.length ? 'py-6' : 'py-14 sm:py-20']"
+        class="group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 text-center transition-[border-color,background-color,padding] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-fg motion-reduce:transition-none"
     >
-        <svg class="h-8 w-8 text-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.9A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-        <span class="text-sm font-medium text-fg">Pilih file atau tarik ke sini</span>
-        <span class="text-xs text-muted">Maks {{ $maxFiles }} file, {{ $maxMb }} MB / file</span>
+        <span class="grid h-14 w-14 place-items-center rounded-full bg-tool text-ink shadow-[inset_0_-3px_0_rgb(0_0_0/0.18)] transition group-hover:-translate-y-0.5 motion-reduce:transition-none"
+            :class="files.length && 'h-10 w-10'">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        </span>
+        <span>
+            <span class="block font-display text-lg font-bold text-fg" x-text="files.length ? 'Tambah file lain' : 'Tarik file ke sini'">Tarik file ke sini</span>
+            <span class="mt-0.5 block text-sm text-muted">atau <span class="font-semibold text-fg underline decoration-tool decoration-2 underline-offset-4">pilih dari perangkat</span></span>
+        </span>
+        <span class="flex flex-wrap justify-center gap-1.5 text-xs text-muted">
+            @if($formats !== '') <span class="badge badge-muted">{{ $formats }}</span> @endif
+            <span class="badge badge-muted">Maks {{ $maxFiles }} file</span>
+            <span class="badge badge-muted">{{ $maxMb }} MB / file</span>
+        </span>
         <input type="file"
             @if($multiple) multiple @endif
             @if($accept) accept="{{ $accept }}" @endif

@@ -2,7 +2,7 @@
 
 namespace App\Providers;
 
-use App\Enums\PermissionName;
+use App\Enums\AdminResource;
 use App\Http\Middleware\EnsureNotBlocked;
 use App\Listeners\AuditTwoFactorChanges;
 use App\Models\BlockedDomain;
@@ -43,7 +43,7 @@ class AppServiceProvider extends ServiceProvider
         ]);
 
         // Superadmin gets catalog permissions only (unknown abilities stay denied).
-        Gate::before(fn (User $user, string $ability) => $user->isSuperadmin() && PermissionName::tryFrom($ability) ? true : null);
+        Gate::before(fn (User $user, string $ability) => $user->isSuperadmin() && AdminResource::isPermission($ability) ? true : null);
 
         BlockedDomain::observe(BlockedDomainObserver::class);
         Event::subscribe(AuditTwoFactorChanges::class);

@@ -20,7 +20,7 @@ class Index extends Component
 {
     use AuthorizesAdmin, WithPagination;
 
-    public const PERMISSION = 'links.view';
+    public const PERMISSION = 'links.view_any';
 
     public const STATUSES = ['all', 'active', 'disabled', 'guest'];
 

@@ -23,7 +23,7 @@ class Show extends Component
 {
     use AuthorizesAdmin, GuardsPropertyTypes;
 
-    public const PERMISSION = 'tools.manage';
+    public const PERMISSION = 'tools.view';
 
     #[Locked]
     public string $slug;
